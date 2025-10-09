@@ -1,0 +1,4 @@
+/models
+.vscode
+run_tra.sh
+__pycache__
