@@ -10,6 +10,8 @@ from argparser import DataArgs, DistillArgs, ModelArgs, parse_args
 import torchvision.transforms as T
 from jafar import load_model
 
+FEATURE_MAX_DIM = 512
+
 class Runner:
     """Engine for training and testing."""
 
@@ -108,6 +110,10 @@ class Runner:
         return Ks
 
 
+    def get_feature_dim(self):
+        data = self.trainLoader.dataset[0]
+        features = self.get_features(data["image"].cuda().unsqueeze(0))
+        return features.shape[-1]
 
     @torch.no_grad()
     def distill(self, distill_args: DistillArgs, data_args: DataArgs):
@@ -116,8 +122,7 @@ class Runner:
         means = self.splats.geometry["means"]
         # we can deal with 2DGS and 3DGS differently
 
-
-        feature_dim = 512
+        feature_dim = self.get_feature_dim()
         self.splat_features = torch.zeros(
             (means.shape[0], feature_dim), dtype=torch.float32, device=self.device
         )
@@ -130,33 +135,59 @@ class Runner:
             desc="Distilling features",
             total=len(self.trainLoader),
         ):
-            if i in [0, 300, 600]:
-                print(data["image_name"])
-                continue
             camtoworlds = data["camtoworld"].to(self.device)
             Ks = data["K"].to(self.device)
             pixels = data["image"].to(self.device)
             height, width = pixels.shape[1:3]
-            features = self.get_features(pixels)[0][:, :, 512:]
+            features = self.get_features(pixels)[0]
 
             Ks = self.rescale_ks(Ks.squeeze(0), width, height, features.shape[0], features.shape[1]).unsqueeze(0)
             features = F.normalize(features, p=2, dim=-1).unsqueeze(0)
 
-            (
-                splat_features_per_image,
-                splat_weights_per_image,
-                ids,
-            ) = self.renderer.inverse_render(
-                K=Ks,
-                extrinsic=camtoworlds,
-                width=features.shape[1],
-                height=features.shape[2],
-                features=features,
-            )
+            # Process features in chunks if feature_dim > FEATURE_MAX_DIM
+            if feature_dim > FEATURE_MAX_DIM:
+                # Process features in chunks of FEATURE_MAX_DIM
+                for start_idx in range(0, feature_dim, FEATURE_MAX_DIM):
+                    end_idx = min(start_idx + FEATURE_MAX_DIM, feature_dim)
+                    features_chunk = features[:, :, :, start_idx:end_idx]
+                    
+                    (
+                        splat_features_per_image,
+                        splat_weights_per_image,
+                        ids,
+                    ) = self.renderer.inverse_render(
+                        K=Ks,
+                        extrinsic=camtoworlds,
+                        width=features_chunk.shape[1],
+                        height=features_chunk.shape[2],
+                        features=features_chunk,
+                    )
 
-            self.splat_features[ids] += splat_features_per_image[:, :feature_dim]
-            self.splat_weights[ids] += splat_weights_per_image
-            del splat_features_per_image, splat_weights_per_image, ids, features
+                    # Store the chunk in the appropriate feature dimension range
+                    self.splat_features[ids, start_idx:end_idx] += splat_features_per_image
+                    if start_idx == 0:
+                        self.splat_weights[ids] += splat_weights_per_image
+                    del splat_features_per_image, splat_weights_per_image
+                    torch.cuda.empty_cache()
+            else:
+                # Original processing for feature_dim <= FEATURE_MAX_DIM
+                (
+                    splat_features_per_image,
+                    splat_weights_per_image,
+                    ids,
+                ) = self.renderer.inverse_render(
+                    K=Ks,
+                    extrinsic=camtoworlds,
+                    width=features.shape[1],
+                    height=features.shape[2],
+                    features=features,
+                )
+
+                self.splat_features[ids] += splat_features_per_image[:, :feature_dim]
+                self.splat_weights[ids] += splat_weights_per_image
+                del splat_features_per_image, splat_weights_per_image
+
+            del ids, features
             torch.cuda.empty_cache()
 
         self.splat_features /= self.splat_weights[..., None]
@@ -168,7 +199,7 @@ class Runner:
         self.basename, _ = os.path.splitext(distill_args.ckpt)
         
         self.splat_features = self.splat_features.cpu()
-        torch.save(self.splat_features, self.basename + "features1.pt")
+        torch.save(self.splat_features, self.basename + "_features.pt")
 
 def main(local_rank: int, world_rank, world_size: int, args):
     data_args, distill_args, model_args = args
