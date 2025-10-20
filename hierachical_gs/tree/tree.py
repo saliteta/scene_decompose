@@ -201,10 +201,92 @@ class HierarchicalTree:
                         node_features = self.features[node.point_indices]
                         node.features = node_features.mean(dim=0)  # Simple mean pooling
                 else:
-                    # Empty node
-                    node.location = torch.zeros(3, device=self.points.device, dtype=self.points.dtype)
-                    if self.features is not None:
-                        node.features = torch.zeros(self.feature_dim, device=self.features.device, dtype=self.features.dtype)
+                    # Empty node - copy from sibling instead of using zeros
+                    self._fill_empty_node_from_sibling(node, layer)
+    
+    def _fill_empty_node_from_sibling(self, empty_node: TreeNode, layer: LayerInfo):
+        """
+        Fill an empty node by copying information from its sibling node.
+        First tries to find the actual sibling (sharing same parent), 
+        then falls back to the nearest sibling in the same layer.
+        """
+        # First try to find the actual sibling (sharing same parent)
+        sibling_node = self._find_actual_sibling_with_data(empty_node)
+        
+        # If no actual sibling has data, find the nearest sibling in the same layer
+        if sibling_node is None:
+            sibling_node = self._find_sibling_with_data(empty_node, layer)
+        
+        if sibling_node is not None:
+            # Copy location and features from sibling
+            empty_node.location = sibling_node.location.clone()
+            if sibling_node.features is not None:
+                empty_node.features = sibling_node.features.clone()
+            else:
+                # Fallback to zeros if sibling also has no features
+                empty_node.location = torch.zeros(3, device=self.points.device, dtype=self.points.dtype)
+                if self.features is not None:
+                    empty_node.features = torch.zeros(self.feature_dim, device=self.features.device, dtype=self.features.dtype)
+        else:
+            # No sibling with data found, use zeros as fallback
+            empty_node.location = torch.zeros(3, device=self.points.device, dtype=self.points.dtype)
+            if self.features is not None:
+                empty_node.features = torch.zeros(self.feature_dim, device=self.features.device, dtype=self.features.dtype)
+    
+    def _find_sibling_with_data(self, empty_node: TreeNode, layer: LayerInfo) -> Optional[TreeNode]:
+        """
+        Find a sibling node that has data (non-empty point_indices).
+        For leaf nodes, we look for the nearest sibling in the same layer.
+        For internal nodes, we look for the nearest sibling in the same layer.
+        """
+        # First, try to find the nearest sibling in the same layer
+        best_sibling = None
+        min_distance = float('inf')
+        
+        for node in layer.nodes:
+            if (node != empty_node and 
+                node.point_indices is not None and 
+                node.point_indices.numel() > 0):
+                
+                # Calculate distance based on local_id (closer in tree structure)
+                distance = abs(node.local_id - empty_node.local_id)
+                if distance < min_distance:
+                    min_distance = distance
+                    best_sibling = node
+        
+        if best_sibling is not None:
+            return best_sibling
+        
+        # If no sibling in same layer has data, look for any node with data
+        for layer_info in self.layers:
+            for node in layer_info.nodes:
+                if (node.point_indices is not None and 
+                    node.point_indices.numel() > 0):
+                    return node
+        
+        return None
+    
+    def _find_actual_sibling_with_data(self, empty_node: TreeNode) -> Optional[TreeNode]:
+        """
+        Find the actual sibling node (sharing the same parent) that has data.
+        This is more specific than _find_sibling_with_data and looks for the true sibling.
+        """
+        if empty_node.parent_id is None:
+            # Root node has no siblings
+            return None
+        
+        parent_node = self.all_nodes[empty_node.parent_id]
+        
+        # Look for siblings (other children of the same parent)
+        for sibling_id in parent_node.children_ids:
+            if sibling_id != empty_node.node_id:
+                sibling_node = self.all_nodes[sibling_id]
+                if (sibling_node.point_indices is not None and 
+                    sibling_node.point_indices.numel() > 0):
+                    return sibling_node
+        
+        # If no direct sibling has data, look for any node with data
+        return self._find_sibling_with_data(empty_node, self.layers[empty_node.layer_id])
     
     # ==================== Core Access Methods ====================
     
@@ -247,7 +329,7 @@ class HierarchicalTree:
         Returns:
             torch.Tensor: Shape [num_parents, num_children_per_parent, feature_dim]
         """
-        if parent_layer_id >= len(self.layers) - 1:
+        if parent_layer_id >= len(self.layers):
             raise ValueError(f"Parent layer {parent_layer_id} has no children")
         
         parent_layer = self.layers[parent_layer_id]
@@ -336,6 +418,62 @@ class HierarchicalTree:
         
         for i, node in enumerate(layer.nodes):
             node.features = new_features[i]
+    
+    def reset_to_base_features(self, new_features: Optional[torch.Tensor] = None, feature_dim: Optional[int] = None):
+        """
+        Reset the tree to use new base features, recomputing all node features from scratch.
+        This allows you to process different initial features with different networks.
+        
+        Args:
+            new_features: New base features [N, C]. If None, uses self.features
+        """
+        if feature_dim is not None:
+            self.feature_dim = feature_dim
+        if new_features is not None:
+            if new_features.shape[0] != self.num_points:
+                raise ValueError(f"Expected {self.num_points} features, got {new_features.shape[0]}")
+            if new_features.shape[1] != self.feature_dim:
+                raise ValueError(f"Expected {self.feature_dim} feature dimensions, got {new_features.shape[1]}")
+            self.features = new_features
+        
+        # Recompute all node features from the base features
+        self._compute_node_data()
+        print(f"✓ Tree reset to use new base features. Shape: {self.features.shape}")
+    
+    def copy_with_new_features(self, new_features: torch.Tensor) -> 'HierarchicalTree':
+        """
+        Create a copy of this tree with new base features but same structure.
+        This is useful when you want to process different features with different networks
+        without modifying the original tree.
+        
+        Args:
+            new_features: New base features [N, C]
+            
+        Returns:
+            New HierarchicalTree instance with same structure but new features
+        """
+        if new_features.shape[0] != self.num_points:
+            raise ValueError(f"Expected {self.num_points} features, got {new_features.shape[0]}")
+        if new_features.shape[1] != self.feature_dim:
+            raise ValueError(f"Expected {self.feature_dim} feature dimensions, got {new_features.shape[1]}")
+        
+        # Create new tree with same structure but new features
+        new_tree = HierarchicalTree.__new__(HierarchicalTree)
+        new_tree.points = self.points
+        new_tree.features = new_features
+        new_tree.num_points = self.num_points
+        new_tree.feature_dim = self.feature_dim
+        new_tree.max_depth = self.max_depth
+        
+        # Copy the tree structure (this is the expensive part, but we're reusing it)
+        new_tree.layers = self.layers
+        new_tree.all_nodes = self.all_nodes
+        
+        # Recompute node data with new features
+        new_tree._compute_node_data()
+        print(f"✓ Created tree copy with new features. Shape: {new_features.shape}")
+        
+        return new_tree
     
     # ==================== Utility Methods ====================
     
