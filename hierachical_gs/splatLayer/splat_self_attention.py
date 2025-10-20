@@ -2,8 +2,7 @@
 
 import torch
 import torch.nn as nn
-from abc import ABC
-
+import torch.nn.functional as F
 """
     Splat Layer is a network according to the tree structure provided by Some Tree:
     - PCA Binary Tree
@@ -36,64 +35,107 @@ from abc import ABC
 
 
 class SplatMeanPooling(nn.Module):
-    def __init__(self):
-        super(SplatMeanPooling, self).__init__()
-    
-    def forward(self, x: torch.Tensor):
-        y = x.mean(dim=0)  # Average across the first dimension (children)
+    """
+    Input:  x ∈ R^{B × N × C}
+    Op:     mean over N (dim=1), then L2-normalize over last dim
+    Output: y ∈ R^{B × C}
+    """
+    def __init__(self, eps: float = 1e-12):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # shape checks
+        assert x.ndim == 3, f"SplatMeanPooling expects a 3D tensor [B, C, N], got shape {tuple(x.shape)}"
+        B, C, N = x.shape
+        assert C > 0 and N > 0, f"Invalid [C, N] dimensions: C={C}, N={N}"
+
+        # mean over C dimension (C)
+        y = x.mean(dim=1)  # [B, N]
         y = torch.nn.functional.normalize(y, dim=-1)
         return y
 
-
 class SplatAttention(nn.Module):
     """
-    Parameter-free self-attention for tensor X with shape (N, C)
-    Thinks it as a strong filter to the features
+    Parameter-free self-attention over the N dimension.
+    Input:  x ∈ R^{B × C × N}
+    Output: y ∈ R^{B × C × N}
+    Q=K=V=x (no projections). Softmax over N.
     """
     def __init__(self):
-        super(SplatAttention, self).__init__()
-    
-    def forward(self, x):
-        """
-        Parameter-free self-attention for tensor X with shape (N, C)
-        
-        Args:
-            x: Input tensor of shape (N, C) where N is sequence length, C is feature dimension
-            
-        Returns:
-            output: Attention-weighted features of shape (N, C)
-        """
-        N, C = x.shape
-        
-        # Use input X directly as Query, Key, Value (no learnable projections)
-        Q = x  # (N, C)
-        K = x  # (N, C)
-        V = x  # (N, C)
-        
-        # Compute attention scores: Q @ K.T
-        # Q: (N, C), K: (N, C) -> (N, N)
-        attention_scores = torch.matmul(Q, K.transpose(-2, -1))
-        
-        # Apply softmax to get attention weights
-        attention_weights = torch.softmax(attention_scores, dim=-1)  # (N, N)
-        
-        # Apply attention to values: attention_weights @ V
-        # (N, N) @ (N, C) -> (N, C)
-        output = torch.matmul(attention_weights, V)
-        
-        return output
+        super().__init__()
 
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Input would be [B,C,N], Output would be [B,C,N] check PCA difference
+        if x.dim() != 3:
+            raise ValueError(f"SplatAttention expects [B, C, N], got {tuple(x.shape)}")
+        B, C, N = x.shape
+        if C <= 0 or N <= 0:
+            raise ValueError(f"Invalid dimensions: C={C}, N={N}")
+
+        # Move to [B, N, C] so N is the sequence length, C is feature dim
+
+
+        Q = x  # [B, N, C]
+        K = x  # [B, N, C]
+        V = x  # [B, N, C]
+
+        # Attention scores: [B, N, N]
+        attn_scores = torch.matmul(Q, K.transpose(-1, -2))  # (Q @ K^T)
+
+        # Softmax over keys (last dim = N)
+        attn = F.softmax(attn_scores, dim=-1)  # [B, N, N]
+
+        # Weighted sum: [B, N, C]
+        Y = torch.matmul(attn, V)
+
+        # Back to [B, C, N] # (64, 8, 1024)
+        return Y
+    
 
 class SplatAttentionPooling(nn.Module):
-    def __init__(self):
-        super(SplatAttentionPooling, self).__init__()
-        self.pooling = SplatMeanPooling()
-        self.attention = SplatAttention()
-    
-    def forward(self, x):
-        x = self.attention(x)
-        x = self.pooling(x)
-        return x
+    """
+    Parameter-free attention over N followed by mean-pooling over C.
+    Memory-friendly: processes the batch B in chunks to avoid CUDA OOM.
+
+    Input:  x ∈ R^{B × C × N}
+    Output: y ∈ R^{B × N}
+    """
+    def __init__(self, chunk_size: int = 64, eps: float = 1e-12, use_scale: bool = True):
+        super().__init__()
+        self.pooling = SplatMeanPooling(eps=eps)   # expects [B, C, N] -> [B, N]
+        self.attention = SplatAttention()  # [B, C, N] -> [B, C, N]
+        self.chunk_size = int(chunk_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # shape checks
+        if x.dim() != 3:
+            raise ValueError(f"SplatAttentionPooling expects [B, C, N], got {tuple(x.shape)}")
+        B, C, N = x.shape
+        if C <= 0 or N <= 0:
+            raise ValueError(f"Invalid [C, N]: {C}, {N}")
+        if self.chunk_size <= 0:
+            raise ValueError(f"chunk_size must be > 0, got {self.chunk_size}")
+
+        # process in chunks along batch dimension
+        outs = []
+        for start in range(0, B, self.chunk_size):
+            end = min(start + self.chunk_size, B)
+            x_chunk = x[start:end]           # [b, C, N]
+            x_chunk = self.attention(x_chunk)  # [b, C, N]
+            y_chunk = self.pooling(x_chunk)    # [b, N]
+            outs.append(y_chunk)
+
+        y = torch.cat(outs, dim=0)  # [B, N]
+        return y
 
 
 
+if __name__ == "__main__":
+    x = torch.randn(64, 8, 1024)
+    pooling = SplatMeanPooling()
+    attention = SplatAttention()
+    attention_pooling = SplatAttentionPooling()
+    y = attention_pooling(x)
+    print(y.shape)
+    exit()
