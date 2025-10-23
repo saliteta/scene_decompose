@@ -89,7 +89,7 @@ class Runner:
         ])
     
     @torch.no_grad()
-    def get_features(self, image: torch.Tensor):
+    def get_features(self, image: torch.Tensor) -> torch.Tensor: # [B, H, W, 3] -> [B, H', W', C]
         """
             JAFAR specific feature extraction pipeline
         """
