@@ -1,25 +1,12 @@
 #!/usr/bin/env python3
 """
 Root setup script for scene-decompose package
-This script delegates to the scene_decompose package setup
 """
 
-import os
-import sys
-from pathlib import Path
-
-# Add the scene_decompose directory to the path
-scene_decompose_dir = Path(__file__).parent / "scene_decompose"
-sys.path.insert(0, str(scene_decompose_dir))
-
-# Change to the scene_decompose directory
-os.chdir(scene_decompose_dir)
-
-# Import and run the setup from scene_decompose
 from setuptools import setup, find_packages
 
 # Read the README file
-with open("README.md", "r", encoding="utf-8") as fh:
+with open("scene_decompose/README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
@@ -36,7 +23,6 @@ setup(
         "scene_decompose": [
             "README.md",
             "*.py",
-            "header/*.py",
             "hierachical_gs/*.py",
             "hierachical_gs/splatLayer/*.py",
             "hierachical_gs/tree/*.py", 

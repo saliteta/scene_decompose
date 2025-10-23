@@ -88,13 +88,13 @@ exclude = [
     "scene_decompose.distill_wrapper", 
     "scene_decompose.hierachical_viewer",
     "scene_decompose.construct_hierachical_gs",
+    "scene_decompose.header",
 ]
 
 [tool.setuptools.package-data]
 "scene_decompose" = [
     "README.md",
     "*.py",
-    "header/*.py",
     "hierachical_gs/*.py",
     "hierachical_gs/splatLayer/*.py", 
     "hierachical_gs/tree/*.py",

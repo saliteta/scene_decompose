@@ -8,7 +8,7 @@ class Database:
     input_description: str = "Default binary layer query"
     output_description: str = "List of [None | Torch.Tensor] as a dense index mask to the database, None means no constrains\
         Binary layer means a binary layer mask"
-    flags = Tuple[List[str], List[Type]] = (["None", "List[Tensor|None]"], [type(None), List[torch.Tensor | None]])
+    flags: Tuple[List[str], List[Type]] = (["None", "List[Tensor|None]"], [type(None), List[torch.Tensor | None]])
     num_layers: int = 0 # number of layers in the database
     features: List[torch.Tensor | None] | None = None
 

@@ -12,12 +12,12 @@ Components:
 
 from .splat_self_attention import SplatAttention, SplatMeanPooling, SplatAttentionPooling
 from .splat_image_attention import SplatImageAttention
-from .gaussian_moment_matching import GaussianMomentMatching
+from .gaussian_moment_matching import GaussianSplatMomentMatching
 
 __all__ = [
     "SplatAttention",
     "SplatMeanPooling", 
     "SplatAttentionPooling",
     "SplatImageAttention",
-    "GaussianMomentMatching",
+    "GaussianSplatMomentMatching",
 ]

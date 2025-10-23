@@ -22,7 +22,6 @@ __email__ = "xiongbutian768@gmail.com"
 # Import main components for easy access
 from .hierachical_gs.tree import PCABinaryTree, HierarchicalTree, TreeNode, LayerInfo
 from .query_system.database import Database, FeatureDatabase
-from .header.classifier import ImageClassifier
 
 __all__ = [
     # Tree components
@@ -33,8 +32,6 @@ __all__ = [
     # Database components
     "Database",
     "FeatureDatabase",
-    # Header components
-    "ImageClassifier",
     # Package info
     "__version__",
     "__author__",

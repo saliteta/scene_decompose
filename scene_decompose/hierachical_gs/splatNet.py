@@ -8,12 +8,12 @@ Notice that this implementation can be generalized to other features
 
 import torch
 import torch.nn as nn
-from hierachical_gs.tree.tree import HierarchicalTree
-from hierachical_gs.splatLayer.splat_self_attention import SplatMeanPooling, SplatAttentionPooling
+from .tree.tree import HierarchicalTree
+from .splatLayer.splat_self_attention import SplatMeanPooling, SplatAttentionPooling
 from tqdm import trange
 from abc import ABC, abstractmethod
 from typing import Optional
-from hierachical_gs.splatLayer.gaussian_moment_matching import GaussianSplatMomentMatching
+from .splatLayer.gaussian_moment_matching import GaussianSplatMomentMatching
 
 
 class SplatNet(nn.Module, ABC):

@@ -1,8 +1,5 @@
 # Include package data
 include scene_decompose/README.md
-include scene_decompose/LICENSE
-include scene_decompose/pyproject.toml
-include scene_decompose/setup.py
 
 # Include Python files
 recursive-include scene_decompose *.py
