@@ -1,0 +1,169 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scene-decompose"
+version = "0.1.0"
+description = "Hierarchical Gaussian Splatting with Query System for Scene Decomposition"
+readme = "scene_decompose/README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Butian Xiong", email = "xiongbutian768@gmail.com"}
+]
+maintainers = [
+    {name = "Butian Xiong", email = "xiongbutian768@gmail.com"}
+]
+keywords = [
+    "gaussian-splatting",
+    "3d-reconstruction", 
+    "computer-vision",
+    "hierarchical-representation",
+    "scene-decomposition",
+    "visual-place-recognition"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=1.9.0",
+    "torchvision>=0.10.0",
+    "numpy>=1.21.0",
+    "Pillow>=8.0.0",
+    "matplotlib>=3.3.0",
+    "opencv-python>=4.5.0",
+    "scikit-learn>=1.0.0",
+    "tyro>=0.5.0",
+    "gsplat-ext",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "black>=21.0",
+    "isort>=5.0",
+    "flake8>=3.8",
+    "mypy>=0.910",
+]
+docs = [
+    "sphinx>=4.0",
+    "sphinx-rtd-theme>=1.0",
+    "myst-parser>=0.15",
+]
+visualization = [
+    "gradio>=3.0",
+    "plotly>=5.0",
+    "seaborn>=0.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/scene-decompose"
+Documentation = "https://scene-decompose.readthedocs.io"
+Repository = "https://github.com/yourusername/scene-decompose.git"
+Issues = "https://github.com/yourusername/scene-decompose/issues"
+
+[project.scripts]
+construct-hierarchical-gs = "scene_decompose.construct_hierachical_gs:main"
+hierarchical-viewer = "scene_decompose.hierachical_viewer:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scene_decompose*"]
+exclude = [
+    "scene_decompose.argparser",
+    "scene_decompose.distill_wrapper", 
+    "scene_decompose.hierachical_viewer",
+    "scene_decompose.construct_hierachical_gs",
+]
+
+[tool.setuptools.package-data]
+"scene_decompose" = [
+    "README.md",
+    "*.py",
+    "header/*.py",
+    "hierachical_gs/*.py",
+    "hierachical_gs/splatLayer/*.py", 
+    "hierachical_gs/tree/*.py",
+    "query_system/*.py",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["scene_decompose"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "gsplat_ext.*",
+    "matplotlib.*",
+    "cv2.*",
+    "PIL.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=scene_decompose",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]

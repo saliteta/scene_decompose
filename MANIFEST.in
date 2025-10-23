@@ -1,0 +1,44 @@
+# Include package data
+include scene_decompose/README.md
+include scene_decompose/LICENSE
+include scene_decompose/pyproject.toml
+include scene_decompose/setup.py
+
+# Include Python files
+recursive-include scene_decompose *.py
+recursive-include scene_decompose/header *.py
+recursive-include scene_decompose/hierachical_gs *.py
+recursive-include scene_decompose/hierachical_gs/tree *.py
+recursive-include scene_decompose/hierachical_gs/splatLayer *.py
+recursive-include scene_decompose/query_system *.py
+
+# Include documentation
+recursive-include docs *.md *.rst *.txt
+recursive-include examples *.py *.md *.ipynb
+
+# Include tests
+recursive-include tests *.py
+
+# Exclude unnecessary files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude __pycache__
+global-exclude .git*
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude *.dylib
+global-exclude *.dll
+
+# Exclude development files
+exclude .gitignore
+exclude .pre-commit-config.yaml
+exclude tox.ini
+exclude .coveragerc
+exclude .pytest_cache
+exclude .mypy_cache
+exclude .coverage
+exclude htmlcov/
+exclude dist/
+exclude build/
+exclude *.egg-info/
