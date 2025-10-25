@@ -67,7 +67,7 @@ class LayerQuerySystem(QuerySystem):
         if query_text is not None:
             assert isinstance(query_text, str), f"Query text must be a string or None, but got {type(query_text)}"
             assert all(c in "01" for c in query_text), f"Query text must only contain '0' and '1', but got {query_text}"
-            assert len(query_text) < self.number_of_layers, f"Query text length must be less than the number of layers, but got {len(query_text)}"
+            assert len(query_text) < self.num_layers, f"Query text length must be less than the number of layers, but got {len(query_text)}"
         else:
             return None
         highest_layer_number = len(query_text)
@@ -75,7 +75,7 @@ class LayerQuerySystem(QuerySystem):
         index_range = []
         for layer in range(highest_layer_number):
             index_range.append(None)
-        for layer in range(highest_layer_number, self.number_of_layers):
+        for layer in range(highest_layer_number, self.num_layers):
             index_range.append(torch.tensor([layer_index << (layer - highest_layer_number), ((layer_index+1) << (layer - highest_layer_number)) - 1]))
         return index_range
 

@@ -27,6 +27,10 @@ class Database:
             "actual_types": self.get_actual_types(),
             "type_mapping": dict(zip(self.flags[0], self.flags[1]))
         }
+    
+    def verbose(self) -> str:
+        """Return a verbose string of the database"""
+        return f"Database: {self.name}\nInput Description: {self.input_description}\nOutput Description: {self.output_description}\nFlags: {self.flags}\nNumber of Layers: {self.num_layers}"
 
     
 @dataclass
