@@ -32,7 +32,7 @@ class QuerySystem:
             f"Availiable Flags: {self.database.get_readable_types()}\n"
 
     @abstractmethod
-    def query(self, query: Union[str, torch.Tensor]) -> Union[List[torch.Tensor], None]:
+    def query(self, query: Union[str, torch.Tensor, None]) -> Union[List[torch.Tensor], None]:
         """
         Query the system with a single text. Torch.Tensor means query with image feature.
         Maybe other types of query will be supported in the future.
@@ -81,12 +81,15 @@ class LayerQuerySystem(QuerySystem):
 
 
 
-class FeatureQuerySystem(QuerySystem):
+class FeatureQuerySystem(LayerQuerySystem):
     def __init__(self, database: FeatureDatabase):
         super().__init__(database)
         self.splat_image_attention = SplatImageAttention()
-    def query(self, query_image: torch.Tensor, layer_level: int = 5, token_level: int = 5)-> Union[List[torch.Tensor], None]:
+
+    
+    def query(self, query_image: Union[torch.Tensor, str, None] = None, layer_level: int = 5, token_level: int = 5)-> Union[List[torch.Tensor], None]:
         """
+        if query image is None or str is given, we run layer query system
         Query the system with a single image.
         We will get the splat's token in the shape of 
         2**layer_level * 2**token_level * C
@@ -100,6 +103,8 @@ class FeatureQuerySystem(QuerySystem):
 
         We are supposed to have 2**token_level == K
         """
+        if query_image is None or isinstance(query_image, str):
+            return super().query(query_image)
         K,C = query_image.shape
         assert layer_level + token_level <= self.num_layers, f"Layer level and token level must be less than the number of layers, but got {layer_level} + {token_level} > {self.num_layers}"
         assert K == 2**token_level, f"Query image must have K tokens, but got {K}, Query level is {token_level}"
