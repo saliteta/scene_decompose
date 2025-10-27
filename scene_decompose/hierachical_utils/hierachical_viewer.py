@@ -14,6 +14,8 @@ from .hierachical_primitive import HierachicalPrimitive
 from .pca_utils import pca_torch_extract_directions, apply_pca_directions_torch
 from ..query_system.database import Database, FeatureDatabase
 from ..query_system.querySystem import QuerySystem, LayerQuerySystem, FeatureQuerySystem
+from gsplat_ext import GaussianPrimitive, GaussianRenderer
+from nerfview import apply_float_colormap
 
 @dataclass
 class HierachicalViewerState(RenderTabState):
@@ -22,6 +24,37 @@ class HierachicalViewerState(RenderTabState):
     layer_index: int = 0
 
 
+class HierachcalPrimitiveCPUCache(HierachicalPrimitive):
+    def __init__(self, with_feature: bool = True):
+        super().__init__(with_feature=with_feature)
+        self.source["attention_scores"]: List[torch.Tensor] = [] # List[torch.Tensor] (attention scores)
+
+    def get_renderer(self, layer_index: int, attention: bool = False) -> GaussianRenderer:
+        primitive = GaussianPrimitive()
+        primitive._geometry["means"] = self.source["geometry"][layer_index][:, :3].cuda()
+        primitive._geometry["quats"] = self.source["geometry"][layer_index][:, 3:7].cuda()
+        primitive._geometry["scales"] = self.source["geometry"][layer_index][:, 7:10].cuda()
+        primitive._geometry["opacities"] = self.source["geometry"][layer_index][:, 10].cuda()
+        primitive._color["colors"] = self.source["color"][layer_index].cuda().reshape(primitive.geometry["means"].shape[0], -1, 3)
+        if attention:
+            primitive._feature = self.source["attention_scores"][layer_index].cuda()
+        else:
+            primitive._feature = self.source["feature"][layer_index].cuda()
+        return GaussianRenderer(primitive)
+
+    def to(self, device: torch.device):
+        super().to(device)
+        self.source["attention_scores"] = [tensor.to(device) for tensor in self.source["attention_scores"]]
+        return self
+    
+    def query_with_list_torch_index(self, index: List[torch.Tensor], mode: Literal["feature", "attention"] = "feature") -> "HierachcalPrimitiveCPUCache":
+        new_hierachical_primitive = HierachcalPrimitiveCPUCache(with_feature=self.with_feature)
+        new_hierachical_primitive.source["geometry"] = [self.source["geometry"][i][index[i][0]: index[i][1]] for i in range(len(index))]
+        new_hierachical_primitive.source["color"] = [self.source["color"][i][index[i][0]: index[i][1]] for i in range(len(index))]
+        if self.with_feature:
+            new_hierachical_primitive.source[mode] = [self.source[mode][i][index[i][0]: index[i][1]] for i in range(len(index))]
+        return new_hierachical_primitive
+    
 
 class HierachicalViewer(Viewer):
     def __init__(self, server: viser.ViserServer, 
@@ -48,10 +81,9 @@ class HierachicalViewer(Viewer):
         print("\033[94m🚀 Initializing HierachicalViewer\033[0m")
         print("="*60)
         
+
         # Initialize source primitive on CPU
         self.hierachical_primitive_initialization()
-        # Setup query system
-        self.setup_query_system()
         
         print("\033[92m✓ HierachicalViewer initialization completed!\033[0m")
         print("="*60 + "\n")
@@ -60,6 +92,18 @@ class HierachicalViewer(Viewer):
         self._current_query_index, self._system_query_index = None, None  # Internal state for query index
         self.curret_renderer_cache = self.hierachical_primitive.get_renderer(0)
         super().__init__(server, self.render_function, None, 'rendering')
+    
+
+    def attention_score_to_color(self, attention_scores: torch.Tensor) -> torch.Tensor:
+        '''
+        Convert attention scores to colors
+        Args:
+            attention_scores: torch.Tensor (N,)
+        Returns:
+            colors: torch.Tensor (N, 3)
+        '''
+        colors = apply_float_colormap(attention_scores.unsqueeze(-1))
+
     
     def _on_dashboard_submit(self, image_feature_token: torch.Tensor):
         """
@@ -73,16 +117,20 @@ class HierachicalViewer(Viewer):
         I think it would be better to run in another thread.
         """
         # image_feature_token is (F,)
-        pass
-        # TODO: Implement the image feature query
-        # TODO: Implement the run of the image feature query in another thread
-        # TODO: Implement the return of the image feature query result
+        if isinstance(self.query_system, FeatureQuerySystem):
+            attn_scores = self.query_system.query(image_feature_token)
+            print(f"\033[92m[HierachicalViewer] Attn scores: {attn_scores.shape}\033[0m")
+        else:
+            raise ValueError(f"Query system type {type(self.query_system)} is not supported, feature query system is required")
+        print(f"\033[92m[HierachicalViewer] Image feature token: {image_feature_token.shape}\033[0m")
 
     def hierachical_primitive_initialization(self):
         "set up splat entity"
         print("\033[93m📦 Loading hierarchical primitive...\033[0m")
-        self._hierachical_primitive = HierachicalPrimitive(with_feature=self.with_feature)
+        self._hierachical_primitive = HierachcalPrimitiveCPUCache(with_feature=True)
         self._hierachical_primitive.load_from_file(self.hierachical_primitive_path)
+        # Setup query system
+        self.setup_query_system()
         print("\033[93m🔧 Applying feature PCA...\033[0m")
         self._feature_pca()
         self._hierachical_primitive.to("cpu")
@@ -120,8 +168,8 @@ class HierachicalViewer(Viewer):
 
     def reset(self):
         self.render_tab_state = copy.deepcopy(self.viewer_state)
-        self.hierachical_primitive_initialization()
         self.setup_query_system()
+        self.hierachical_primitive_initialization()
 
     def _feature_pca(self):
         if self._hierachical_primitive.with_feature is False:

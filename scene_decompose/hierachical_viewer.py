@@ -18,7 +18,7 @@ import time
 import tyro
 from dataclasses import dataclass
 from typing import Annotated
-from scene_decompose import HierachicalViewer, LayerQuerySystem, Database, HierachicalViewerState
+from scene_decompose import HierachicalViewer, FeatureQuerySystem, Database, HierachicalViewerState, FeatureDatabase
 
 
 @dataclass
@@ -35,8 +35,8 @@ def main(args):
         server=server,
         hierachical_primitive_path=hierachical_primitive_path,
         viewer_state=HierachicalViewerState(render_mode="RGB"),
-        database=Database,
-        query_system_type=LayerQuerySystem,
+        database=FeatureDatabase,
+        query_system_type=FeatureQuerySystem,
         with_feature=True
 
     )

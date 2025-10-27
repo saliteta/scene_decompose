@@ -303,7 +303,7 @@ def process_quantized_jafar_pca(
     pca_img_original = Image.fromarray(pca_array_original)
     pca_img_original = pca_img_original.resize((target_shape[1], target_shape[0]), Image.BILINEAR)
     
-    pca_info = f"Quantized JAFAR PCA visualization: {feature_processor.k} clusters, {feature_processor.n_pca} PCA components (quantized: {quantized_features.shape}, original: {original_features.shape})"
+    pca_info = f"Quantized JAFAR PCA visualization: Cluster Center Shpae {cluster_centers.shape}, {feature_processor.k} clusters, {feature_processor.n_pca} PCA components (quantized: {quantized_features.shape}, original: {original_features.shape})"
     
     return cluster_centers, pca_img_quantized, pca_img_original, pca_info
 
@@ -410,10 +410,7 @@ def launch_image_dashboard(
             pca_img_original = None
         
         if on_submit is not None:
-            try:
-                on_submit(cluster_centers)  # notify the parent (HierachicalViewer)
-            except Exception as e:
-                print(f"[Gradio] on_submit callback error: {e}")
+            on_submit(cluster_centers)  # notify the parent (HierachicalViewer)
         
         return img, f"Image shape (H, W, C): {shape}\n{pca_info}", pca_img_quantized, pca_img_original
 

@@ -104,6 +104,7 @@ class FeatureQuerySystem(LayerQuerySystem):
         We are supposed to have 2**token_level == K
         """
         if query_image is None or isinstance(query_image, str):
+            print(f"\033[92m[FeatureQuerySystem] Query image is None or str, running layer query system\033[0m")
             return super().query(query_image)
         K,C = query_image.shape
         assert layer_level + token_level <= self.num_layers, f"Layer level and token level must be less than the number of layers, but got {layer_level} + {token_level} > {self.num_layers}"
@@ -113,8 +114,10 @@ class FeatureQuerySystem(LayerQuerySystem):
                 Feature dim is {self.database.features[layer_level].shape[1]} for layer {layer_level}"
         
         splat_block_features:torch.Tensor = self._prepare_splat_block_features(layer_level, token_level)
+        print(f"\033[92m[FeatureQuerySystem] Splat block features: {splat_block_features.shape}\033[0m")
 
         attn_scores:torch.Tensor = self.splat_image_attention(splat_block_features, query_image)
+        print(f"\033[92m[FeatureQuerySystem] Attention scores: {attn_scores.shape}\033[0m")
         assert attn_scores.shape == (2**layer_level,), f"Attention scores must have 2**layer_level elements, but got {attn_scores.shape}"
         return attn_scores
     
@@ -131,7 +134,6 @@ class FeatureQuerySystem(LayerQuerySystem):
 
         block_number = 2 ** layer_level
         token_number = 2 ** token_level
-
-        flat_features:torch.Tensor = self.database.features[layer_level] # [N, C]
+        flat_features:torch.Tensor = self.database.features[-(layer_level+token_level+1)] # [N, C]
         block_features:torch.Tensor = flat_features.view(block_number, token_number, -1) # [2**layer_level, 2**token_level, C]
-        return block_features
+        return block_features.to("cuda")
