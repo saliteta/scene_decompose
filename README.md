@@ -47,4 +47,12 @@ python hierachical_viewer.py -s {the output GS}
 - [x] Establish the node traversing visualization
 - [x] Establishing a universal Query System that can fit into viewer and can pipelining
 - [x] Establish 3D Node Features and 2D Patchify Image Feature Cross Attention Mechanism
-- [ ] Experiments and Explaination
+- [x] Experiments and Explaination Visually
+
+## Stage II To Do
+- [ ] Generalize the rough visual localization pipeline
+- [ ] Establishing the Ground Truth visualization tool
+- [ ] Establishing the Metrics Measurement Pipeline
+- [ ] Establishing the Detail Debugging Components 
+
+
