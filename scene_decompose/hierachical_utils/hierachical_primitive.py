@@ -2,6 +2,7 @@
 from gsplat_ext import GaussianPrimitive, GaussianRenderer
 import torch
 from typing import Union, Dict, List
+import warnings
 
 class HierachicalPrimitive:
     """
@@ -89,7 +90,30 @@ class HierachicalPrimitive:
             Returns:
                 None
         """
-        self.source = torch.load(file_path)
+        loaded_dict = torch.load(file_path)
+        
+        # Check for key mismatches and warn users
+        current_keys = set(self.source.keys())
+        loaded_keys = set(loaded_dict.keys())
+        
+        # Warn about keys in file that are not in self.source
+        extra_keys = loaded_keys - current_keys
+        if extra_keys:
+            warnings.warn(f"Loaded file contains extra keys that will be ignored: {extra_keys}")
+        
+        # Warn about keys in self.source that are not in loaded file
+        missing_keys = current_keys - loaded_keys
+        if missing_keys:
+            warnings.warn(f"Loaded file is missing keys that exist in current source: {missing_keys}")
+        
+        # Load values for keys that exist in self.source
+        for key in current_keys:
+            if key in loaded_keys:
+                if isinstance(self.source[key], list) and isinstance(loaded_dict[key], list):
+                     self.source[key] = loaded_dict[key]
+                else:
+                    warnings.warn(f"Key '{key}' exists in both but values are not lists. Skipping merge.")
+            # else: key exists only in self.source, leave it unchanged
 
     def to(self, device: torch.device):
         """
@@ -142,3 +166,56 @@ class HierachicalPrimitive:
                 if self.with_feature:
                     new_hierachical_primitive.source["feature"].append(self.source["feature"][i][index[i][0]: index[i][1]])
         return new_hierachical_primitive
+
+    
+    def propagate_feature(self, feature: torch.Tensor)-> List[torch.Tensor]:
+        """
+        We propagate the feature to the child nodes. As well as the parent nodes.
+        The parents node will be the mean of the child nodes.
+            Args:
+                feature: torch.Tensor, the feature to propagate, shape: [2**N, F]
+            Returns:
+                List[torch.Tensor], the propagated feature The list is the max layer number of the hierachical primitive
+        """
+        if feature.dim() != 2:
+            raise ValueError("feature must be a 2D tensor of shape [2**N, F]")
+
+        num_nodes, feature_dim = feature.shape
+
+        # Ensure num_nodes is a power of two
+        if num_nodes < 1 or (num_nodes & (num_nodes - 1)) != 0:
+            raise ValueError("The first dimension of feature must be a power of two (2**N)")
+
+        # Build features per layer from root (layer 0) to leaves (layer N)
+        per_layer_features: List[torch.Tensor] = []
+
+        # Start from the deepest layer (leaves)
+        current_layer_features = feature
+
+        # Collect layers upward until we reach the root
+        layers_reversed: List[torch.Tensor] = [current_layer_features]
+        while current_layer_features.shape[0] > 1:
+            # Group every two children and take their mean to get the parent feature
+            parent_features = current_layer_features.view(-1, 2, feature_dim).mean(dim=1)
+            layers_reversed.append(parent_features)
+            current_layer_features = parent_features
+
+        # Reverse so that index 0 is root (single node), and last is leaves (2**N nodes)
+        per_layer_features = list(reversed(layers_reversed))
+
+        # Ensure we cover exactly the number of layers present in geometry
+        # Geometry is organized as a list per layer from root to deepest
+        target_layers = len(self.source["geometry"]) if "geometry" in self.source else len(per_layer_features)
+
+        # If we have more layers than needed, truncate
+        if len(per_layer_features) >= target_layers:
+            return per_layer_features[:target_layers]
+
+        # Otherwise, propagate features downward to children layers by duplicating each parent into two children
+        current = per_layer_features[-1]
+        while len(per_layer_features) < target_layers:
+            # Shape: [M, F] -> [M*2, F] by repeating each row twice (left/right child)
+            current = current.unsqueeze(1).repeat(1, 2, 1).view(-1, feature_dim)
+            per_layer_features.append(current)
+
+        return per_layer_features

@@ -20,9 +20,13 @@ from nerfview import apply_float_colormap
 @dataclass
 class HierachicalViewerState(RenderTabState):
     backgrounds: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-    render_mode: Literal["RGB", "Feature"] = "RGB"
     layer_index: int = 0
-
+    #### Input value
+    render_mode: Literal["RGB", "Feature", "Attention"] = "RGB"
+    query_index: str = ""
+    #### Internal value for cache update
+    current_render_mode: Literal["RGB", "Feature", "Attention"] = "RGB"
+    current_query_index: str = ""
 
 class HierachcalPrimitiveCPUCache(HierachicalPrimitive):
     def __init__(self, with_feature: bool = True):
@@ -44,18 +48,58 @@ class HierachcalPrimitiveCPUCache(HierachicalPrimitive):
 
     def to(self, device: torch.device):
         super().to(device)
+        if len(self.source["attention_scores"]) == 0:
+            return self
         self.source["attention_scores"] = [tensor.to(device) for tensor in self.source["attention_scores"]]
         return self
-    
-    def query_with_list_torch_index(self, index: List[torch.Tensor], mode: Literal["feature", "attention"] = "feature") -> "HierachcalPrimitiveCPUCache":
-        new_hierachical_primitive = HierachcalPrimitiveCPUCache(with_feature=self.with_feature)
-        new_hierachical_primitive.source["geometry"] = [self.source["geometry"][i][index[i][0]: index[i][1]] for i in range(len(index))]
-        new_hierachical_primitive.source["color"] = [self.source["color"][i][index[i][0]: index[i][1]] for i in range(len(index))]
-        if self.with_feature:
-            new_hierachical_primitive.source[mode] = [self.source[mode][i][index[i][0]: index[i][1]] for i in range(len(index))]
-        return new_hierachical_primitive
-    
 
+    def setup_mode(self, mode: Literal["RGB", "Feature", "Attention"]) -> HierachicalPrimitive:
+        if mode == "Feature" or mode == "RGB":
+            return self
+        elif mode == "Attention":
+            # Create a lightweight view that reuses existing CPU tensors without cloning
+            # Geometry and color are shared; feature is aliased to attention_scores
+            new_hierachical_primitive = HierachicalPrimitive(with_feature=True)
+            new_hierachical_primitive.source["geometry"] = self.source["geometry"]
+            new_hierachical_primitive.source["color"] = self.source["color"]
+            new_hierachical_primitive.source["feature"] = self.source["attention_scores"]
+            return new_hierachical_primitive
+        else:
+            raise ValueError(f"Unsupported render mode: {mode}")
+    
+    
+    def set_attention_colors(self, attention_scores: torch.Tensor) -> None:
+        '''
+        Convert attention scores to colors
+        The colors will stored at self.source[""]
+        Args:
+            attention_scores: torch.Tensor (N,)
+        Returns:
+            None
+        '''
+        
+        # Normalize attention scores to [0, 1]
+        if attention_scores.dim() > 1:
+            attention_scores = attention_scores.squeeze()
+        mins = attention_scores.min()
+        maxs = attention_scores.max()
+        eps = torch.finfo(attention_scores.dtype).eps if attention_scores.is_floating_point() else 1e-8
+        denom = (maxs - mins) + eps
+        attention_scores = (attention_scores - mins) / denom
+        attention_scores = attention_scores.clamp(0.0, 1.0)
+
+        propagated_feature = self.propagate_feature(attention_scores.unsqueeze(-1))
+        propagated_feature = reversed(propagated_feature)
+
+        for i, feature in enumerate(propagated_feature):
+            colors = apply_float_colormap(feature.unsqueeze(-1))
+            colors = colors.squeeze(1)
+            if len(self.source["attention_scores"]) == i:
+                self.source["attention_scores"].append(colors)
+            else:
+                self.source["attention_scores"][i] = colors
+
+    
 class HierachicalViewer(Viewer):
     def __init__(self, server: viser.ViserServer, 
                        hierachical_primitive_path: Path, 
@@ -87,9 +131,9 @@ class HierachicalViewer(Viewer):
         
         print("\033[92m✓ HierachicalViewer initialization completed!\033[0m")
         print("="*60 + "\n")
+
         # Caching system
         self._hierachical_primitive_gpu_cache = None
-        self._current_query_index, self._system_query_index = None, None  # Internal state for query index
         self.curret_renderer_cache = self.hierachical_primitive.get_renderer(0)
         super().__init__(server, self.render_function, None, 'rendering')
     
@@ -103,7 +147,6 @@ class HierachicalViewer(Viewer):
             colors: torch.Tensor (N, 3)
         '''
         colors = apply_float_colormap(attention_scores.unsqueeze(-1))
-
     
     def _on_dashboard_submit(self, image_feature_token: torch.Tensor):
         """
@@ -118,11 +161,12 @@ class HierachicalViewer(Viewer):
         """
         # image_feature_token is (F,)
         if isinstance(self.query_system, FeatureQuerySystem):
-            attn_scores = self.query_system.query(image_feature_token)
+            attn_scores = self.query_system.query(image_feature_token, 7)
             print(f"\033[92m[HierachicalViewer] Attn scores: {attn_scores.shape}\033[0m")
         else:
             raise ValueError(f"Query system type {type(self.query_system)} is not supported, feature query system is required")
         print(f"\033[92m[HierachicalViewer] Image feature token: {image_feature_token.shape}\033[0m")
+        self._hierachical_primitive.set_attention_colors(attn_scores)
 
     def hierachical_primitive_initialization(self):
         "set up splat entity"
@@ -148,21 +192,27 @@ class HierachicalViewer(Viewer):
 
 
     def _update_hierachical_primitive_gpu_cache(self):
-        self._current_query_index = self._system_query_index
-        if self._system_query_index == None:
-            return self._hierachical_primitive.copy_to("cuda")
+        cpu_aliased = self._hierachical_primitive.setup_mode(self.render_tab_state.render_mode)
+        if self.render_tab_state.query_index == "":
+            gpu_cache = cpu_aliased.copy_to("cuda")
         else:
-            query_list = self.query_system.query(self._system_query_index)
+            query_list = self.query_system.query(self.render_tab_state.query_index)
             assert query_list is not None, "Query list is None, should be handled above"
-            return self._hierachical_primitive.query_with_list_torch_index(query_list).copy_to("cuda")
-
+            gpu_cache = cpu_aliased.query_with_list_torch_index(query_list).copy_to("cuda")
+        return gpu_cache
+        
 
     @property
-    def hierachical_primitive(self):
-        if self._hierachical_primitive_gpu_cache == None or (self._current_query_index != self._system_query_index):
+    def hierachical_primitive(self) -> HierachcalPrimitiveCPUCache:
+        no_cache_flag = self._hierachical_primitive_gpu_cache == None
+        inconsistent_query_flag = self.viewer_state.current_query_index != self.render_tab_state.query_index
+        mode_change_flag = self.render_tab_state.render_mode != self.viewer_state.current_render_mode
+        if no_cache_flag or inconsistent_query_flag or mode_change_flag:
             # inconsistent query index, update the cache
             # or no cache, update the cache
             self._hierachical_primitive_gpu_cache = self._update_hierachical_primitive_gpu_cache()
+            self.viewer_state.current_render_mode = self.render_tab_state.render_mode
+            self.viewer_state.current_query_index = self.render_tab_state.query_index
         return self._hierachical_primitive_gpu_cache
 
 
@@ -199,7 +249,6 @@ class HierachicalViewer(Viewer):
             self._hierachical_primitive.source["feature"] = self.feature_pcas
 
 
-
     def camera_state_parser(self, camera_state: CameraState, render_tab_state: RenderTabState)-> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         c2w = camera_state.c2w
         width = render_tab_state.render_width
@@ -217,6 +266,8 @@ class HierachicalViewer(Viewer):
             image = self.curret_renderer_cache.render(K, c2w, width, height, state.render_mode)
         elif state.render_mode == "Feature":
             image = self.curret_renderer_cache.render(K, c2w, width, height, state.render_mode)
+        elif state.render_mode == "Attention":
+            image = self.curret_renderer_cache.render(K, c2w, width, height, "Feature")
         else:
             raise ValueError(f"Unsupported render mode: {state.render_mode}")
         return image.cpu().numpy()
@@ -236,6 +287,7 @@ class HierachicalViewer(Viewer):
                 (
                     "RGB",
                     "Feature",
+                    "Attention",
                 ),
                 initial_value=self.render_tab_state.render_mode,
                 hint="Render mode to use.",
@@ -281,7 +333,7 @@ class HierachicalViewer(Viewer):
             def _(_evt):
                 text_value = self.text_input.value
                 print(f"[Text Input] Submitted node query: '{text_value}'")
-                self._system_query_index = text_value
+                self.render_tab_state.query_index = text_value
                 del self.curret_renderer_cache
                 torch.cuda.empty_cache()
                 self.curret_renderer_cache = self.hierachical_primitive.get_renderer(self.render_tab_state.layer_index)
@@ -298,6 +350,10 @@ class HierachicalViewer(Viewer):
             @self.render_mode_dropdown.on_update
             def _(_) -> None:
                 self.render_tab_state.render_mode = self.render_mode_dropdown.value
+                if self.render_tab_state.render_mode != "RGB":
+                    del self.curret_renderer_cache
+                    torch.cuda.empty_cache()
+                    self.curret_renderer_cache = self.hierachical_primitive.get_renderer(self.render_tab_state.layer_index)
                 self.rerender(_)
 
 

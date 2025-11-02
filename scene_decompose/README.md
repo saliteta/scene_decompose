@@ -37,6 +37,6 @@ python hierachical_viewer.py -s {the output GS}
 - [x] Establish Hierachical Gaussian Loader, and Gaussian Viewer using gsplat_ext
 - [x] Establish the Gradio Visualization Tab for Image Features and blending with gsplat_ext
 - [x] Establish the node traversing visualization
-- [ ] Establishing a universal Query System that can fit into viewer and can pipelining
-- [ ] Establish 3D Node Features and 2D Patchify Image Feature Cross Attention Mechanism
+- [x] Establishing a universal Query System that can fit into viewer and can pipelining
+- [x] Establish 3D Node Features and 2D Patchify Image Feature Cross Attention Mechanism
 - [ ] Experiments and Explaination
