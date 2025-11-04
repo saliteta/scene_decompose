@@ -1,7 +1,29 @@
 # pip install tyro
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Literal
 import tyro
+
+# ----- Backbone options -----
+BACKBONE_OPTIONS = (
+    "vit_large_patch16_dinov3.lvd1689m",
+    "vit_base_patch16_224",
+    "ViT-B-16",
+    "vit_base_patch16_224.dino",
+    "vit_small_patch14_dinov2.lvd142m",
+    "vit_base_patch14_dinov2.lvd142m",
+    "vit_small_patch14_reg4_dinov2",
+    "vit_small_patch16_dinov3.lvd1689m",
+    "vit_small_plus_patch16_dinov3.lvd1689m",
+    "vit_base_patch16_dinov3.lvd1689m",
+    "vit_base_patch16_clip_384",
+    "vit_base_patch16_siglip_512.v2_webli",
+    "radio_v2.5-b",
+    "radio_v2.5-l",
+    "radio_v2.5-h",
+)
+
+### Detail Check JAFAR Backbone options:
+# https://github.com/PaulCouairon/JAFAR/blob/main/jafar.ipynb
 
 # ----- Your dataclasses -----
 @dataclass
@@ -17,8 +39,26 @@ class DistillArgs:
 
 @dataclass
 class ModelArgs:
-    model_path: str
-    backbone: str = "vit_large_patch16_dinov3.lvd1689m"
+    model_type: Literal["jafar", "openclip"] = "jafar"
+    backbone: Literal[
+        "ViT-B-16", # OpenCLIP Backbone
+        ######### JAFAR Backbone #########
+        "vit_large_patch16_dinov3.lvd1689m",
+        "vit_base_patch16_224",
+        "vit_base_patch16_224.dino",
+        "vit_small_patch14_dinov2.lvd142m",
+        "vit_base_patch14_dinov2.lvd142m",
+        "vit_small_patch14_reg4_dinov2",
+        "vit_small_patch16_dinov3.lvd1689m",
+        "vit_small_plus_patch16_dinov3.lvd1689m",
+        "vit_base_patch16_dinov3.lvd1689m",
+        "vit_base_patch16_clip_384",
+        "vit_base_patch16_siglip_512.v2_webli",
+        "radio_v2.5-b",
+        "radio_v2.5-l",
+        "radio_v2.5-h",
+    ] = "vit_large_patch16_dinov3.lvd1689m"
+    model_path: Optional[str] = None 
 
 # ----- Wrapper for tyro (nested CLI groups) -----
 @dataclass

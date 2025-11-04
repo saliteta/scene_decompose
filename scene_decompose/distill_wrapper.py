@@ -9,6 +9,7 @@ from gsplat_ext import GaussianRenderer, GaussianRenderer2D, BetaSplatRenderer
 from argparser import DataArgs, DistillArgs, ModelArgs, parse_args
 import torchvision.transforms as T
 from jafar import load_model
+from general_wrapper.feature_extractor import FeatureExtractorOpenCLIP, FeatureExtractorConfig, FeatureExtractorJAFAR
 
 FEATURE_MAX_DIM = 512
 
@@ -74,32 +75,34 @@ class Runner:
             We add on the fly feature generation pipeline for current experiments
             We assume that we are actually using the dinov3 model
         """
-        project_root = os.getcwd()
-        self.model, self.backbone = load_model(model_args.backbone, project_root, model_args.model_path) # tuple of model and backbone
-        self.model.eval()
-        self.backbone.eval()
-        self.model : torch.nn.Module = self.model.to(self.device)
-        self.backbone : torch.nn.Module = self.backbone.to(self.device)
-        mean = [0.485, 0.456, 0.406]
-        std  = [0.229, 0.224, 0.225]
-
-        self.transform = T.Compose([
-            T.Resize((448, 448)),
-            T.Normalize(mean=mean, std=std),
-        ])
+        config = FeatureExtractorConfig(model_type=model_args.model_type, 
+                                        model_architecture=model_args.backbone, 
+                                        model_path=model_args.model_path,
+                                        device=self.device)
+        if model_args.model_type == "jafar":
+            self.feature_extractor = FeatureExtractorJAFAR(config)
+        elif model_args.model_type == "openclip":
+            self.feature_extractor = FeatureExtractorOpenCLIP(config)
+        else:
+            raise ValueError(f"Invalid model type: {model_args.model_type}")
     
     @torch.no_grad()
     def get_features(self, image: torch.Tensor) -> torch.Tensor: # [B, H, W, 3] -> [B, H', W', C]
         """
-            JAFAR specific feature extraction pipeline
+            Feature extraction pipeline (supports JAFAR and OpenCLIP)
+            Input: [B, H, W, 3] tensor with pixel values in [0, 255]
+            Output: [B, H', W', C] tensor
         """
-        image = image.permute(0, 3, 1, 2).squeeze(0)/255.0
-
-        image = self.transform(image)
-        image = image.unsqueeze(0)
-        lr_feats, _ = self.backbone(image)
-        hr_feats = self.model(image, lr_feats, (448, 448))  # expect (B, C, H', W') or similar
-        return hr_feats.permute(0,2,3,1)
+        # extract_features expects (H, W, 3) format, so handle batch dimension
+        if image.dim() == 4:
+            # If batched, process each image separately or squeeze if B=1
+            if image.shape[0] == 1:
+                image = image.squeeze(0)  # [H, W, 3]
+            else:
+                # For multiple images, process first one or raise error
+                image = image[0]  # Take first image
+        features = self.feature_extractor.extract_features(image)
+        return features
 
 
     def rescale_ks(self, Ks: torch.Tensor, width, height, width_new, height_new):
