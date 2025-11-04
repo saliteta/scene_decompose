@@ -92,7 +92,7 @@ class HierachcalPrimitiveCPUCache(HierachicalPrimitive):
         propagated_feature = reversed(propagated_feature)
 
         for i, feature in enumerate(propagated_feature):
-            colors = apply_float_colormap(feature.unsqueeze(-1))
+            colors = apply_float_colormap(feature.unsqueeze(-1), 'turbo')
             colors = colors.squeeze(1)
             if len(self.source["attention_scores"]) == i:
                 self.source["attention_scores"].append(colors)
@@ -138,15 +138,6 @@ class HierachicalViewer(Viewer):
         super().__init__(server, self.render_function, None, 'rendering')
     
 
-    def attention_score_to_color(self, attention_scores: torch.Tensor) -> torch.Tensor:
-        '''
-        Convert attention scores to colors
-        Args:
-            attention_scores: torch.Tensor (N,)
-        Returns:
-            colors: torch.Tensor (N, 3)
-        '''
-        colors = apply_float_colormap(attention_scores.unsqueeze(-1))
     
     def _on_dashboard_submit(self, image_feature_token: torch.Tensor):
         """
