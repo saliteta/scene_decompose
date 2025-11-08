@@ -2,7 +2,12 @@ from .database import Database, FeatureDatabase
 from typing import Union, List
 import torch
 from abc import abstractmethod
-from ..hierachical_gs.splatLayer.splat_image_attention import SplatImageAttention
+try:
+    # Try absolute import first (when run as module)
+    from scene_decompose.hierachical_gs.splatLayer.splat_image_attention import SplatImageAttention
+except ImportError:
+    # Fall back to relative import (when imported as a module)
+    from ..hierachical_gs.splatLayer.splat_image_attention import SplatImageAttention
 
 class QuerySystem:
     def __init__(self,database: Database):
@@ -115,7 +120,6 @@ class FeatureQuerySystem(LayerQuerySystem):
         
         splat_block_features:torch.Tensor = self._prepare_splat_block_features(layer_level, token_level)
         print(f"\033[92m[FeatureQuerySystem] Splat block features: {splat_block_features.shape}\033[0m")
-
         attn_scores:torch.Tensor = self.splat_image_attention(splat_block_features, query_image)
         print(f"\033[92m[FeatureQuerySystem] Attention scores: {attn_scores.shape}\033[0m")
         assert attn_scores.shape == (2**layer_level,), f"Attention scores must have 2**layer_level elements, but got {attn_scores.shape}"

@@ -6,13 +6,16 @@ Input of the system is a single image, and the output is a torch tensor of shape
 """
 
 from abc import ABC, abstractmethod
-from typing import Literal, List, Callable
+from typing import Literal, List, Callable, Dict
 import torch
 from dataclasses import dataclass, field
 import torchvision.transforms as T
 import os
 from jafar import load_model
 import open_clip
+from gsplat_ext import Dataset, Parser
+
+
 @dataclass
 class FeatureExtractorConfig:
     """
@@ -273,13 +276,31 @@ class FeatureExtractorOpenCLIP(FeatureExtractor):
             *filtered_transforms             # Remaining OpenCLIP transforms
         ])
 
+class FeatureExtractorGT:
+    ### Special case for GT features
+    ### Model is the colmap model
+    ### Input is the image name instead of PIL.Image
+
+    def __init__(self, config: FeatureExtractorConfig):
+        self.config = config
+        self.setup_model()
+    
+    def setup_model(self) -> None:
+        parser = Parser(self.config.model_path, test_every=10000000)  # use all data for query
+        dataset = Dataset(parser, split="train")
+        self.dataset = dataset
+
+    def extract_features(self, index: int) -> Dict[str, torch.Tensor]:
+        data_dict = self.dataset[index]
+        return data_dict
+    
+    def setup_transform(self) -> None:
+        pass
+
 
 if __name__ == "__main__":
-    config = FeatureExtractorConfig(model_type="openclip", 
-    model_architecture="ViT-B-16", 
-    device="cuda")
-    extractor = FeatureExtractorOpenCLIP(config)
-    # Input should be (H, W, 3) format with values in [0, 255] range
-    image = torch.randint(0, 256, (224, 224, 3), dtype=torch.float32)
-    features = extractor.extract_features(image)
-    print(features.shape)
+    config = FeatureExtractorConfig(model_type="gt", 
+    model_path="/data1/COLMAP_RESULT/CUHK_LOWER", device="cuda")
+    extractor = FeatureExtractorGT(config)
+    features = extractor.extract_features(0)
+    print(features.keys())
