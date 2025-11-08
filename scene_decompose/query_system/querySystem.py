@@ -119,9 +119,7 @@ class FeatureQuerySystem(LayerQuerySystem):
                 Feature dim is {self.database.features[layer_level].shape[1]} for layer {layer_level}"
         
         splat_block_features:torch.Tensor = self._prepare_splat_block_features(layer_level, token_level)
-        print(f"\033[92m[FeatureQuerySystem] Splat block features: {splat_block_features.shape}\033[0m")
         attn_scores:torch.Tensor = self.splat_image_attention(splat_block_features, query_image)
-        print(f"\033[92m[FeatureQuerySystem] Attention scores: {attn_scores.shape}\033[0m")
         assert attn_scores.shape == (2**layer_level,), f"Attention scores must have 2**layer_level elements, but got {attn_scores.shape}"
         return attn_scores
     

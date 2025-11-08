@@ -1,0 +1,26 @@
+# config.yaml
+hydra:
+  run:
+    # keep working dir where you launched the script
+    dir: .
+
+dataset_path: "/data1/COLMAP_RESULT/" # The path to the dataset GauUscene
+
+# Where to write all outputs
+output_path: "/data1/vpr_eval"
+
+train:
+  steps: 10000
+
+lifting: 
+  feature_encoder: "jafar_dinov3"
+  model_path: "/data1/vfms/vit_large_patch16_dinov3.lvd1689m.pth"
+  output_postfix: "jafar_dinov3"
+
+
+hierachical_gs:
+  attention_start_layer: 3
+  hops_for_attention: 3
+  output_postfix: "jafar_dinov3"
+
+

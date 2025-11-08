@@ -5,38 +5,38 @@ from pathlib import Path
 from gsplat_ext import GaussianPrimitive
 from hierachical_gs.tree.pca_tree import PCABinaryTree
 from hierachical_gs.splatNet import SplatCondenseNet, GSMMNet
-from gsplat_ext import HierachicalPrimitive
+from hierachical_utils.hierachical_primitive import HierachicalPrimitive
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Annotated
 
 @dataclass
 class HierarchicalGSConfig:
     """Configuration for constructing hierarchical Gaussian Splats"""
     
     # Input paths
-    ckpt_path: Path
-    """Path to the checkpoint file (abbreviation: -c)"""
+    ckpt_path: Annotated[Path, tyro.conf.arg(aliases=["-c"])]
+    """Path to the checkpoint file"""
     
-    feature_path: Path
-    """Path to the feature file (abbreviation: -f)"""
+    feature_path: Annotated[Path, tyro.conf.arg(aliases=["-f"])]
+    """Path to the feature file"""
     
     # Output path
-    output_path: Path
-    """Path to save the hierarchical Gaussian Splat (abbreviation: -o)"""
+    output_path: Annotated[Path, tyro.conf.arg(aliases=["-o"])]
+    """Path to save the hierarchical Gaussian Splat"""
     
     # Network parameters
-    attention_start_layer: int = 3
-    """Layer to start attention mechanism (abbreviation: -asl)"""
+    attention_start_layer: Annotated[int, tyro.conf.arg(aliases=["-asl"])] = 3
+    """Layer to start attention mechanism"""
     
-    hops_for_attention: int = 3
-    """Number of hops for attention (abbreviation: -hfa)"""
+    hops_for_attention: Annotated[int, tyro.conf.arg(aliases=["-hfa"])] = 3
+    """Number of hops for attention"""
     
     # Processing options
-    with_feature: bool = True
-    """Whether to include features in the hierarchical primitive (abbreviation: -wf)"""
+    with_feature: Annotated[bool, tyro.conf.arg(aliases=["-wf"])] = True
+    """Whether to include features in the hierarchical primitive"""
     
-    verbose: bool = True
-    """Whether to print progress information (abbreviation: -v)"""
+    verbose: Annotated[bool, tyro.conf.arg(aliases=["-v"])] = True
+    """Whether to print progress information"""
 
         
 def form_features(primitive: GaussianPrimitive):
@@ -87,6 +87,8 @@ def main(config: HierarchicalGSConfig):
     # Create condensation network
     if config.verbose:
         print("🧠 Creating SplatCondenseNet...")
+    
+    tree = tree.to("cpu")
     
     condense_net = SplatCondenseNet(tree, 
                                    attention_start_layer=config.attention_start_layer, 

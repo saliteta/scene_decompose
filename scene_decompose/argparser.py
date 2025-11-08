@@ -35,7 +35,8 @@ class DataArgs:
 @dataclass
 class DistillArgs:
     ckpt: str
-    method: str = '3DGS'
+    method: Literal["2DGS", "3DGS", "DBS", "H_GS"] = '3DGS'
+    feature_ckpt: str|None = None
 
 @dataclass
 class ModelArgs:

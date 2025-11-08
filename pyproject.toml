@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scene-decompose"
-version = "0.1.0"
+version = "0.2.0"
 description = "Hierarchical Gaussian Splatting with Query System for Scene Decomposition"
 readme = "scene_decompose/README.md"
 license = {text = "MIT"}

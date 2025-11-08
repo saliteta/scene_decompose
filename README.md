@@ -67,9 +67,11 @@ python hierachical_viewer.py -s {the output GS}
 - [x] Experiments and Explaination Visually
 
 ## Stage II To Do
-- [ ] Generalize the rough visual localization pipeline
-- [ ] Establishing the Ground Truth visualization tool
-- [ ] Establishing the Metrics Measurement Pipeline
+- [x] Generalize the rough visual localization pipeline
+- [x] Establishing the Ground Truth visualization tool
+- [x] Establishing the Metrics Measurement Pipeline
+- [ ] Establish the Pipeline for train, lifting, hierachical decomposite, eval
+- [ ] Verify the Metrics is Reliable
 - [ ] Establishing the Detail Debugging Components 
 
 

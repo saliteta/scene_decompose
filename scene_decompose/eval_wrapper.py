@@ -215,7 +215,7 @@ class Runner:
             })
         
         # Save results to CSV
-        output_csv_path = Path(distill_args.ckpt).parent / "similarity_results.csv"
+        output_csv_path = Path(distill_args.ckpt).parent / "metrics.csv"
         with open(output_csv_path, 'w', newline='') as csvfile:
             fieldnames = ['image_index', 'image_id', 'image_name', 'similarity', 'precision_at_10', 'recall_at_10']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
