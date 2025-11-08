@@ -142,23 +142,51 @@ class SplatCondenseNet(SplatNet):
     def _process_with_mean_pooling(self, tree: HierarchicalTree, parent_layer_id: int) -> torch.Tensor:
         """
         Process features using mean pooling (direct parent-child relationship).
+        Processes in batches of 4096 for memory efficiency.
         """
         # Get parent-child features: [num_parents, 2, feature_dim]
         parent_child_features = tree.get_parent_child_features(parent_layer_id) # [num_parents, 2, feature_dim]
+        host_device = parent_child_features.device
+        num_parents = parent_child_features.shape[0]
+        batch_size = 4096
         
-        processed_features = self.mean_pooling(parent_child_features) # [num_parents, feature_dim]
+        # Process in batches
+        processed_batches = []
+        for batch_start in range(0, num_parents, batch_size):
+            batch_end = min(batch_start + batch_size, num_parents)
+            batch_features = parent_child_features[batch_start:batch_end].to("cuda")
+            batch_processed = self.mean_pooling(batch_features) # [batch_size, feature_dim]
+            processed_batches.append(batch_processed.to(host_device))
+        
+        # Concatenate all batches
+        processed_features = torch.cat(processed_batches, dim=0) # [num_parents, feature_dim]
         return processed_features
     
     def _process_with_attention_pooling(self, tree: HierarchicalTree, parent_layer_id: int) -> torch.Tensor:
         """
         Process features using attention pooling (multiple hops to get more children per parent).
+        Processes in batches of 512 for memory efficiency.
         """
         # Calculate source layer (where we collect features from)
         source_layer_id = max(0, parent_layer_id - self.hops_for_attention)
         
         # Get ancestor-descendant features: [num_ancestors, 2^hops, feature_dim]
         ancestor_descendant_features = tree.get_ancestor_descendant_features(source_layer_id, self.hops_for_attention)
-        new_ancestor_features = self.attention_pooling(ancestor_descendant_features) # [num_ancestors, feature_dim]
+        host_device = ancestor_descendant_features.device
+        num_ancestors = ancestor_descendant_features.shape[0]
+        batch_size = 512
+        
+        # Process in batches
+        processed_batches = []
+        for batch_start in range(0, num_ancestors, batch_size):
+            batch_end = min(batch_start + batch_size, num_ancestors)
+            batch_features = ancestor_descendant_features[batch_start:batch_end].to("cuda")
+            batch_processed = self.attention_pooling(batch_features) # [batch_size, feature_dim]
+            processed_batches.append(batch_processed.to(host_device))
+        
+        # Concatenate all batches
+        new_ancestor_features = torch.cat(processed_batches, dim=0) # [num_ancestors, feature_dim]
+        
         target_layer_id = source_layer_id + self.hops_for_attention
         assert target_layer_id == parent_layer_id, "Target layer ID does not match parent layer ID"
         return new_ancestor_features

@@ -12,6 +12,7 @@ from typing import List, Optional, Dict, Tuple, Any
 from dataclasses import dataclass
 import numpy as np
 from tqdm import tqdm
+import gc
 
 
 @dataclass
@@ -190,16 +191,18 @@ class HierarchicalTree:
     def _compute_node_data(self):
         """Compute features and locations for all nodes."""
         # Process from leaves up
-        for layer in tqdm(self.layers, desc="Computing node data, time decreasing exponentially"):
+        for i, layer in tqdm(enumerate(self.layers), desc="Computing node data, time decreasing exponentially", total=len(self.layers)):
             for node in layer.nodes:
+                if i != 0:
+                    break
                 if node.point_indices is not None and node.point_indices.numel() > 0:
                     # Compute location (mean of assigned points)
                     node.location = self.points[node.point_indices].mean(dim=0)
                     
                     # Compute features if available
                     if self.features is not None:
-                        node_features = self.features[node.point_indices]
-                        node.features = node_features.mean(dim=0)  # Simple mean pooling
+
+                        node.features = self.features[node.point_indices].mean(dim=0)
                 else:
                     # Empty node - copy from sibling instead of using zeros
                     self._fill_empty_node_from_sibling(node, layer)
@@ -509,3 +512,45 @@ class HierarchicalTree:
             if layer.nodes and layer.nodes[0].location is not None:
                 print(f"  Locations: {layer.nodes[0].location.shape}")
 
+    def to(self, device: torch.device, in_place: bool = True):
+        """
+        Move all tensors to the specified device.
+        
+        Args:
+            device: Target device (e.g., torch.device('cpu') or torch.device('cuda'))
+            in_place: If True and moving from CUDA to CPU, release CUDA memory after transfer
+        
+        Returns:
+            self (for chaining)
+        """
+        # Check if we're moving from CUDA to CPU for memory release
+        was_on_cuda = self.points.is_cuda
+        moving_to_cpu = device == 'cpu'
+        moving_to_cuda = device == 'cuda'
+        should_release_memory = in_place and was_on_cuda and moving_to_cpu
+        
+        # Move main tensors (use non_blocking only when moving to CUDA for async transfer)
+        self.points = self.points.to(device, non_blocking=moving_to_cuda)
+        if self.features is not None:
+            self.features = self.features.to(device, non_blocking=moving_to_cuda)
+        
+        # Move node tensors
+        for layer in self.layers:
+            for node in layer.nodes:
+                if node.point_indices is not None:
+                    node.point_indices = node.point_indices.to(device, non_blocking=moving_to_cuda)
+                if node.location is not None:
+                    node.location = node.location.to(device, non_blocking=moving_to_cuda)
+                if node.features is not None:
+                    node.features = node.features.to(device, non_blocking=moving_to_cuda)
+        
+        # Release CUDA memory if requested
+        if should_release_memory:
+            # Synchronize CUDA operations to ensure all transfers are complete
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            gc.collect()  # Collect Python garbage first
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()  # Clear CUDA cache
+        
+        return self

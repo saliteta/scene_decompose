@@ -11,10 +11,10 @@ with open("scene_decompose/README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="scene-decompose",
-    version="0.1.0",
+    version="0.2.0",
     author="Butian Xiong",
     author_email="xiongbutian768@gmail.com",
-    description="Hierarchical Gaussian Splatting with Query System for Scene Decomposition",
+    description="Hierarchical Gaussian Splatting with Query System for Scene Decomposition, also GT visualization tool",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/yourusername/scene-decompose",
