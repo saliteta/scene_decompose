@@ -25,11 +25,15 @@ from .query_system.database import Database, FeatureDatabase
 from .query_system.querySystem import QuerySystem, LayerQuerySystem, FeatureQuerySystem
 from .hierachical_utils.hierachical_viewer import HierachicalViewer
 from .hierachical_utils.hierachical_viewer import HierachicalViewerState
-from .general_wrapper.gs_viewer_wrapper import GeneralViewerWrapper, GeneralViewerWrapperState
+from .general_wrapper.gs_viewer_wrapper import (
+    GeneralViewerWrapper,
+    GeneralViewerWrapperState,
+)
+
 __all__ = [
     # Tree components
     "PCABinaryTree",
-    "HierarchicalTree", 
+    "HierarchicalTree",
     "TreeNode",
     "LayerInfo",
     # Hierachical viewer state

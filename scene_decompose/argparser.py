@@ -25,6 +25,7 @@ BACKBONE_OPTIONS = (
 ### Detail Check JAFAR Backbone options:
 # https://github.com/PaulCouairon/JAFAR/blob/main/jafar.ipynb
 
+
 # ----- Your dataclasses -----
 @dataclass
 class DataArgs:
@@ -32,17 +33,19 @@ class DataArgs:
     test_every: int = 1000
     factor: int = 1
 
+
 @dataclass
 class DistillArgs:
     ckpt: str
-    method: Literal["2DGS", "3DGS", "DBS", "H_GS"] = '3DGS'
-    feature_ckpt: str|None = None
+    method: Literal["2DGS", "3DGS", "DBS", "H_GS"] = "3DGS"
+    feature_ckpt: str | None = None
+
 
 @dataclass
 class ModelArgs:
     model_type: Literal["jafar", "openclip"] = "jafar"
     backbone: Literal[
-        "ViT-B-16", # OpenCLIP Backbone
+        "ViT-B-16",  # OpenCLIP Backbone
         ######### JAFAR Backbone #########
         "vit_large_patch16_dinov3.lvd1689m",
         "vit_base_patch16_224",
@@ -59,7 +62,8 @@ class ModelArgs:
         "radio_v2.5-l",
         "radio_v2.5-h",
     ] = "vit_large_patch16_dinov3.lvd1689m"
-    model_path: Optional[str] = None 
+    model_path: Optional[str] = None
+
 
 # ----- Wrapper for tyro (nested CLI groups) -----
 @dataclass
@@ -67,6 +71,7 @@ class Args:
     data: DataArgs
     distill: DistillArgs
     model: ModelArgs
+
 
 def parse_args() -> tuple[DataArgs, DistillArgs, ModelArgs]:
     """

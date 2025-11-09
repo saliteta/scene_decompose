@@ -25,7 +25,7 @@ setup(
             "*.py",
             "hierachical_gs/*.py",
             "hierachical_gs/splatLayer/*.py",
-            "hierachical_gs/tree/*.py", 
+            "hierachical_gs/tree/*.py",
             "query_system/*.py",
         ]
     },

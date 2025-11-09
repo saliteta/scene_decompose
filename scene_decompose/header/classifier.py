@@ -17,30 +17,35 @@ import torchvision.transforms as T
 from torchvision.transforms import InterpolationMode
 
 mean = (0.485, 0.456, 0.406)
-std  = (0.229, 0.224, 0.225)
+std = (0.229, 0.224, 0.225)
 
 # For images (PIL -> Tensor -> Normalize)
-IMAGE_TRANSFORM = T.Compose([
-    T.Resize((448, 448), interpolation=InterpolationMode.BICUBIC),
-    T.ToTensor(),                          # makes [C,H,W] in [0,1]
-    T.Normalize(mean=mean, std=std),
-])
+IMAGE_TRANSFORM = T.Compose(
+    [
+        T.Resize((448, 448), interpolation=InterpolationMode.BICUBIC),
+        T.ToTensor(),  # makes [C,H,W] in [0,1]
+        T.Normalize(mean=mean, std=std),
+    ]
+)
 
 # For masks (PIL -> Tensor of longs). Use nearest to keep class ids intact.
-MASK_TRANSFORM = T.Compose([
-    T.Resize((448, 448), interpolation=InterpolationMode.NEAREST),
-    T.PILToTensor(),                       # uint8 [1,H,W]
-    T.Lambda(lambda x: x.squeeze(0).long())# [H,W] long
-])
+MASK_TRANSFORM = T.Compose(
+    [
+        T.Resize((448, 448), interpolation=InterpolationMode.NEAREST),
+        T.PILToTensor(),  # uint8 [1,H,W]
+        T.Lambda(lambda x: x.squeeze(0).long()),  # [H,W] long
+    ]
+)
+
 
 # ---------------------------
 # Config
 # ---------------------------
 class Cfg:
     ade_root = "/data0/ADEChallengeData2016"  # set this!
-    split = "training"   # "training" or "validation"
+    split = "training"  # "training" or "validation"
     val_split = "validation"
-    num_classes = 151     # ADE20K has 150 semantic classes; 255 is 'void' to ignore
+    num_classes = 151  # ADE20K has 150 semantic classes; 255 is 'void' to ignore
     batch_size = 2
     workers = 2
     epochs = 6
@@ -50,9 +55,11 @@ class Cfg:
     # If your backbone needs specific image size/normalization, set them here:
     img_size = 518  # example; set as your backbone expects (or None to keep native)
     mean = (0.485, 0.456, 0.406)  # typical ImageNet
-    std  = (0.229, 0.224, 0.225)
+    std = (0.229, 0.224, 0.225)
     backbone = "vit_large_patch16_dinov3.lvd1689m"
     model_path = "vit_large_patch16_dinov3.lvd1689m.pth"
+
+
 # ---------------------------
 # ADE20K Dataset
 # Folder structure:
@@ -77,7 +84,7 @@ class ADE20KDataset(Dataset):
         self.ids = [i for i in self.ids if (self.ann_dir / f"{i}.png").exists()]
 
         # Default transform: ToTensor + normalize (tweak for your backbone)
-        self.img_transform  = IMAGE_TRANSFORM 
+        self.img_transform = IMAGE_TRANSFORM
         self.mask_transform = MASK_TRANSFORM
 
     def __len__(self):
@@ -88,21 +95,28 @@ class ADE20KDataset(Dataset):
         img_path = self.img_dir / f"{id_}.jpg"
         ann_path = self.ann_dir / f"{id_}.png"
 
-        img_pil  = Image.open(img_path).convert("RGB")
-        mask_pil = Image.open(ann_path)        # 0..149; 255 = ignore
+        img_pil = Image.open(img_path).convert("RGB")
+        mask_pil = Image.open(ann_path)  # 0..149; 255 = ignore
 
-        img  = self.img_transform(img_pil)     # [3, H, W] float32
-        mask = self.mask_transform(mask_pil)   # [H, W]   int64
+        img = self.img_transform(img_pil)  # [3, H, W] float32
+        mask = self.mask_transform(mask_pil)  # [H, W]   int64
 
         if self.return_paths:
             return img, mask, str(img_path)
         return img, mask
 
+
 # ---------------------------
 # Patch-level head (1x1 conv)
 # ---------------------------
 class PatchClassifierHead(nn.Module):
-    def __init__(self, in_channels: int, num_classes: int, dropout_p: float = 0.0, use_bn: bool = False):
+    def __init__(
+        self,
+        in_channels: int,
+        num_classes: int,
+        dropout_p: float = 0.0,
+        use_bn: bool = False,
+    ):
         super().__init__()
         layers = []
         if use_bn:
@@ -115,6 +129,7 @@ class PatchClassifierHead(nn.Module):
     def forward(self, feats: torch.Tensor) -> torch.Tensor:
         # feats: [B, C, Hf, Wf]
         return self.head(feats)
+
 
 # ---------------------------
 # Backbone placeholder
@@ -133,27 +148,33 @@ class Dinov3Backbone(nn.Module):
         # Return dummy features here; replace with real backbone.forward()
         B, _, H, W = x.shape
         lr_feats, _ = self.backbone(x)
-        hr_feats = self.model(x, lr_feats, (448, 448))  # expect (B, C, H', W') or similar
-
+        hr_feats = self.model(
+            x, lr_feats, (448, 448)
+        )  # expect (B, C, H', W') or similar
 
         # Normalize the C channel (feature dimension) to unit norm per spatial location
         # hr_feats: [B, C, H', W']
         hr_feats = F.normalize(hr_feats, p=2, dim=1)
         return hr_feats
 
+
 # ---------------------------
 # Utils
 # ---------------------------
-def resize_mask_to_feature(mask: torch.Tensor, size_hw: Tuple[int, int]) -> torch.Tensor:
+def resize_mask_to_feature(
+    mask: torch.Tensor, size_hw: Tuple[int, int]
+) -> torch.Tensor:
     """Resize integer mask [B,H,W] to feature size using nearest neighbor."""
     # Convert to [B,1,H,W] -> interpolate (nearest) -> [B,Hf,Wf]
     mask = mask.unsqueeze(1).float()
     mask = F.interpolate(mask, size=size_hw, mode="nearest")
     return mask[:, 0].long()
 
+
 def set_requires_grad(model: nn.Module, flag: bool):
     for p in model.parameters():
         p.requires_grad = flag
+
 
 # ---------------------------
 # Train / Eval
@@ -163,7 +184,7 @@ def train_one_epoch(backbone, head, loader, opt, device):
     head.train()
 
     total_loss, total_pix, total_correct = 0.0, 0, 0
-    for imgs, masks in tqdm(loader, desc = "Training"):
+    for imgs, masks in tqdm(loader, desc="Training"):
         imgs = imgs.to(device, non_blocking=True)
         masks = masks.to(device, non_blocking=True)  # [B,H,W], 0..149, void=255
 
@@ -173,7 +194,6 @@ def train_one_epoch(backbone, head, loader, opt, device):
 
         # Downsample mask to feature grid
         masks_ds = resize_mask_to_feature(masks, (Hf, Wf))  # [B,Hf,Wf]
-        
 
         logits = head(feats)  # [B,num_classes,Hf,Wf]
 
@@ -187,7 +207,7 @@ def train_one_epoch(backbone, head, loader, opt, device):
 
         # Compute train pixel acc (ignore void)
         with torch.no_grad():
-            preds = logits.argmax(1)               # [B,Hf,Wf]
+            preds = logits.argmax(1)  # [B,Hf,Wf]
             valid = masks_ds != 255
             total_pix += valid.sum().item()
             total_correct += (preds.eq(masks_ds) & valid).sum().item()
@@ -195,6 +215,7 @@ def train_one_epoch(backbone, head, loader, opt, device):
     avg_loss = total_loss / len(loader.dataset)
     acc = total_correct / max(1, total_pix)
     return avg_loss, acc
+
 
 @torch.no_grad()
 def evaluate(backbone, head, loader, device):
@@ -224,6 +245,7 @@ def evaluate(backbone, head, loader, device):
     acc = total_correct / max(1, total_pix)
     return avg_loss, acc
 
+
 # ---------------------------
 # Main
 # ---------------------------
@@ -232,23 +254,35 @@ def main():
 
     # Datasets
     train_set = ADE20KDataset(root=Cfg.ade_root, split=Cfg.split)
-    val_set   = ADE20KDataset(root=Cfg.ade_root, split=Cfg.val_split)
+    val_set = ADE20KDataset(root=Cfg.ade_root, split=Cfg.val_split)
 
-    train_loader = DataLoader(train_set, batch_size=Cfg.batch_size, shuffle=True,
-                              num_workers=Cfg.workers, pin_memory=True, drop_last=True)
-    val_loader   = DataLoader(val_set, batch_size=Cfg.batch_size, shuffle=False,
-                              num_workers=Cfg.workers, pin_memory=True)
-    
+    train_loader = DataLoader(
+        train_set,
+        batch_size=Cfg.batch_size,
+        shuffle=True,
+        num_workers=Cfg.workers,
+        pin_memory=True,
+        drop_last=True,
+    )
+    val_loader = DataLoader(
+        val_set,
+        batch_size=Cfg.batch_size,
+        shuffle=False,
+        num_workers=Cfg.workers,
+        pin_memory=True,
+    )
 
     # Models
     project_root = os.getcwd()
-    model, backbone = load_model(Cfg.backbone, project_root, Cfg.model_path) # tuple of model and backbone
+    model, backbone = load_model(
+        Cfg.backbone, project_root, Cfg.model_path
+    )  # tuple of model and backbone
     backbone = Dinov3Backbone(model, backbone).to(device)
-    set_requires_grad(backbone, False)   # freeze backbone
+    set_requires_grad(backbone, False)  # freeze backbone
 
-    head = PatchClassifierHead(in_channels=1024,
-                               num_classes=Cfg.num_classes,
-                               dropout_p=0.0, use_bn=False).to(device)
+    head = PatchClassifierHead(
+        in_channels=1024, num_classes=Cfg.num_classes, dropout_p=0.0, use_bn=False
+    ).to(device)
 
     # INSERT_YOUR_CODE
     # Load head weights from checkpoint if available
@@ -270,12 +304,15 @@ def main():
         tr_loss, tr_acc = train_one_epoch(backbone, head, train_loader, opt, device)
         va_loss, va_acc = evaluate(backbone, head, val_loader, device)
 
-        print(f"[{epoch:03d}] train loss {tr_loss:.4f} acc {tr_acc:.4f} | "
-              f"val loss {va_loss:.4f} acc {va_acc:.4f}")
+        print(
+            f"[{epoch:03d}] train loss {tr_loss:.4f} acc {tr_acc:.4f} | "
+            f"val loss {va_loss:.4f} acc {va_acc:.4f}"
+        )
 
         if va_acc > best_val:
             best_val = va_acc
             torch.save({"head": head.state_dict()}, "best_patch_head.pth")
+
 
 if __name__ == "__main__":
     main()

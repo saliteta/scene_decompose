@@ -1,8 +1,9 @@
-# 
+#
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 """
     Splat Layer is a network according to the tree structure provided by Some Tree:
     - PCA Binary Tree
@@ -40,13 +41,16 @@ class SplatMeanPooling(nn.Module):
     Op:     mean over N (dim=1), then L2-normalize over last dim
     Output: y ∈ R^{B × C}
     """
+
     def __init__(self, eps: float = 1e-12):
         super().__init__()
         self.eps = eps
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # shape checks
-        assert x.ndim == 3, f"SplatMeanPooling expects a 3D tensor [B, C, N], got shape {tuple(x.shape)}"
+        assert (
+            x.ndim == 3
+        ), f"SplatMeanPooling expects a 3D tensor [B, C, N], got shape {tuple(x.shape)}"
         B, C, N = x.shape
         assert C > 0 and N > 0, f"Invalid [C, N] dimensions: C={C}, N={N}"
 
@@ -55,6 +59,7 @@ class SplatMeanPooling(nn.Module):
         y = torch.nn.functional.normalize(y, dim=-1)
         return y
 
+
 class SplatAttention(nn.Module):
     """
     Parameter-free self-attention over the N dimension.
@@ -62,6 +67,7 @@ class SplatAttention(nn.Module):
     Output: y ∈ R^{B × C × N}
     Q=K=V=x (no projections). Softmax over N.
     """
+
     def __init__(self):
         super().__init__()
 
@@ -74,7 +80,6 @@ class SplatAttention(nn.Module):
             raise ValueError(f"Invalid dimensions: C={C}, N={N}")
 
         # Move to [B, N, C] so N is the sequence length, C is feature dim
-
 
         Q = x  # [B, N, C]
         K = x  # [B, N, C]
@@ -91,7 +96,7 @@ class SplatAttention(nn.Module):
 
         # Back to [B, C, N] # (64, 8, 1024)
         return Y
-    
+
 
 class SplatAttentionPooling(nn.Module):
     """
@@ -101,16 +106,21 @@ class SplatAttentionPooling(nn.Module):
     Input:  x ∈ R^{B × C × N}
     Output: y ∈ R^{B × N}
     """
-    def __init__(self, chunk_size: int = 64, eps: float = 1e-12, use_scale: bool = True):
+
+    def __init__(
+        self, chunk_size: int = 64, eps: float = 1e-12, use_scale: bool = True
+    ):
         super().__init__()
-        self.pooling = SplatMeanPooling(eps=eps)   # expects [B, C, N] -> [B, N]
+        self.pooling = SplatMeanPooling(eps=eps)  # expects [B, C, N] -> [B, N]
         self.attention = SplatAttention()  # [B, C, N] -> [B, C, N]
         self.chunk_size = int(chunk_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # shape checks
         if x.dim() != 3:
-            raise ValueError(f"SplatAttentionPooling expects [B, C, N], got {tuple(x.shape)}")
+            raise ValueError(
+                f"SplatAttentionPooling expects [B, C, N], got {tuple(x.shape)}"
+            )
         B, C, N = x.shape
         if C <= 0 or N <= 0:
             raise ValueError(f"Invalid [C, N]: {C}, {N}")
@@ -121,14 +131,13 @@ class SplatAttentionPooling(nn.Module):
         outs = []
         for start in range(0, B, self.chunk_size):
             end = min(start + self.chunk_size, B)
-            x_chunk = x[start:end]           # [b, C, N]
+            x_chunk = x[start:end]  # [b, C, N]
             x_chunk = self.attention(x_chunk)  # [b, C, N]
-            y_chunk = self.pooling(x_chunk)    # [b, N]
+            y_chunk = self.pooling(x_chunk)  # [b, N]
             outs.append(y_chunk)
 
         y = torch.cat(outs, dim=0)  # [B, N]
         return y
-
 
 
 if __name__ == "__main__":

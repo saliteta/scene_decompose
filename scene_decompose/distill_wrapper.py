@@ -9,14 +9,21 @@ from gsplat_ext import GaussianRenderer, GaussianRenderer2D, BetaSplatRenderer
 from argparser import DataArgs, DistillArgs, ModelArgs, parse_args
 import torchvision.transforms as T
 from jafar import load_model
-from general_wrapper.feature_extractor import FeatureExtractorOpenCLIP, FeatureExtractorConfig, FeatureExtractorJAFAR
+from general_wrapper.feature_extractor import (
+    FeatureExtractorOpenCLIP,
+    FeatureExtractorConfig,
+    FeatureExtractorJAFAR,
+)
 
 FEATURE_MAX_DIM = 512
+
 
 class Runner:
     """Engine for training and testing."""
 
-    def __init__(self, data_args: DataArgs, distill_args: DistillArgs, model_args: ModelArgs) -> None:
+    def __init__(
+        self, data_args: DataArgs, distill_args: DistillArgs, model_args: ModelArgs
+    ) -> None:
 
         self.data_args = data_args
         self.distill_args = distill_args
@@ -64,34 +71,38 @@ class Runner:
             self.renderer = BetaSplatRenderer(self.splats)
         else:
             raise ValueError(f"Invalid splat method: {distill_args.method}")
-        
-        #filter_mask = self.splats.filtering_alpha(percentage=0.5)
-        #self.splats.mask(filter_mask)
-        #self.splats.to(self.device)
+
+        # filter_mask = self.splats.filtering_alpha(percentage=0.5)
+        # self.splats.mask(filter_mask)
+        # self.splats.to(self.device)
 
     @torch.no_grad()
     def set_model(self, model_args: ModelArgs):
         """
-            We add on the fly feature generation pipeline for current experiments
-            We assume that we are actually using the dinov3 model
+        We add on the fly feature generation pipeline for current experiments
+        We assume that we are actually using the dinov3 model
         """
-        config = FeatureExtractorConfig(model_type=model_args.model_type, 
-                                        model_architecture=model_args.backbone, 
-                                        model_path=model_args.model_path,
-                                        device=self.device)
+        config = FeatureExtractorConfig(
+            model_type=model_args.model_type,
+            model_architecture=model_args.backbone,
+            model_path=model_args.model_path,
+            device=self.device,
+        )
         if model_args.model_type == "jafar":
             self.feature_extractor = FeatureExtractorJAFAR(config)
         elif model_args.model_type == "openclip":
             self.feature_extractor = FeatureExtractorOpenCLIP(config)
         else:
             raise ValueError(f"Invalid model type: {model_args.model_type}")
-    
+
     @torch.no_grad()
-    def get_features(self, image: torch.Tensor) -> torch.Tensor: # [B, H, W, 3] -> [B, H', W', C]
+    def get_features(
+        self, image: torch.Tensor
+    ) -> torch.Tensor:  # [B, H, W, 3] -> [B, H', W', C]
         """
-            Feature extraction pipeline (supports JAFAR and OpenCLIP)
-            Input: [B, H, W, 3] tensor with pixel values in [0, 255]
-            Output: [B, H', W', C] tensor
+        Feature extraction pipeline (supports JAFAR and OpenCLIP)
+        Input: [B, H, W, 3] tensor with pixel values in [0, 255]
+        Output: [B, H', W', C] tensor
         """
         # extract_features expects (H, W, 3) format, so handle batch dimension
         if image.dim() == 4:
@@ -104,14 +115,12 @@ class Runner:
         features = self.feature_extractor.extract_features(image)
         return features
 
-
     def rescale_ks(self, Ks: torch.Tensor, width, height, width_new, height_new):
         Ks[0, 0] *= width_new / width
         Ks[1, 1] *= height_new / height
         Ks[0, 2] = width_new / 2
         Ks[1, 2] = height_new / 2
         return Ks
-
 
     def get_feature_dim(self):
         data = self.trainLoader.dataset[0]
@@ -144,7 +153,9 @@ class Runner:
             height, width = pixels.shape[1:3]
             features = self.get_features(pixels)[0]
 
-            Ks = self.rescale_ks(Ks.squeeze(0), width, height, features.shape[0], features.shape[1]).unsqueeze(0)
+            Ks = self.rescale_ks(
+                Ks.squeeze(0), width, height, features.shape[0], features.shape[1]
+            ).unsqueeze(0)
             features = F.normalize(features, p=2, dim=-1).unsqueeze(0)
 
             # Process features in chunks if feature_dim > FEATURE_MAX_DIM
@@ -153,7 +164,7 @@ class Runner:
                 for start_idx in range(0, feature_dim, FEATURE_MAX_DIM):
                     end_idx = min(start_idx + FEATURE_MAX_DIM, feature_dim)
                     features_chunk = features[:, :, :, start_idx:end_idx]
-                    
+
                     (
                         splat_features_per_image,
                         splat_weights_per_image,
@@ -167,7 +178,9 @@ class Runner:
                     )
 
                     # Store the chunk in the appropriate feature dimension range
-                    self.splat_features[ids, start_idx:end_idx] += splat_features_per_image
+                    self.splat_features[
+                        ids, start_idx:end_idx
+                    ] += splat_features_per_image
                     if start_idx == 0:
                         self.splat_weights[ids] += splat_weights_per_image
                     del splat_features_per_image, splat_weights_per_image
@@ -200,9 +213,10 @@ class Runner:
         torch.cuda.empty_cache()
 
         self.basename, _ = os.path.splitext(distill_args.ckpt)
-        
+
         self.splat_features = self.splat_features.cpu()
         torch.save(self.splat_features, self.basename + "_features.pt")
+
 
 def main(local_rank: int, world_rank, world_size: int, args):
     data_args, distill_args, model_args = args

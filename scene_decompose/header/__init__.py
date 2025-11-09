@@ -16,6 +16,6 @@ from .labeling import ImageLabeler
 
 __all__ = [
     "ADE20KLoader",
-    "ImageClassifier", 
+    "ImageClassifier",
     "ImageLabeler",
 ]

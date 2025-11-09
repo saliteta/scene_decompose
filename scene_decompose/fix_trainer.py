@@ -16,6 +16,7 @@ import tyro
 import viser
 import yaml
 from gsplat_ext import Dataset, Parser
+
 # from datasets.colmap import Dataset, Parser
 from gsplat_ext import (
     generate_ellipse_path_z,
@@ -23,14 +24,25 @@ from gsplat_ext import (
     generate_spiral_path,
 )
 from fused_ssim import fused_ssim
-from scene_decompose.train.lib_bilagrid import BilateralGrid, color_correct, slice, total_variation_loss
+from scene_decompose.train.lib_bilagrid import (
+    BilateralGrid,
+    color_correct,
+    slice,
+    total_variation_loss,
+)
 from torch import Tensor
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from typing_extensions import Literal, assert_never
-from scene_decompose.train.utils import AppearanceOptModule, CameraOptModule, knn, rgb_to_sh, set_random_seed
+from scene_decompose.train.utils import (
+    AppearanceOptModule,
+    CameraOptModule,
+    knn,
+    rgb_to_sh,
+    set_random_seed,
+)
 
 from gsplat import export_splats
 from gsplat.compression import PngCompression
@@ -533,7 +545,8 @@ class Runner:
             packed=self.cfg.packed,
             absgrad=(
                 self.cfg.strategy.absgrad
-                if isinstance(self.cfg.strategy, DefaultStrategy) or isinstance(self.cfg.strategy, FeatureStrategy)
+                if isinstance(self.cfg.strategy, DefaultStrategy)
+                or isinstance(self.cfg.strategy, FeatureStrategy)
                 else False
             ),
             sparse_grad=self.cfg.sparse_grad,
@@ -876,7 +889,7 @@ class Runner:
                     step=step,
                     info=info,
                     packed=cfg.packed,
-                )  
+                )
             elif isinstance(self.cfg.strategy, FeatureStrategy):
                 self.cfg.strategy.step_post_backward(
                     params=self.splats,
@@ -1239,6 +1252,5 @@ if __name__ == "__main__":
     }
     cfg = tyro.extras.overridable_config_cli(configs)
     cfg.adjust_steps(cfg.steps_scaler)
-
 
     cli(main, cfg, verbose=True)

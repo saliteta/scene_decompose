@@ -6,6 +6,7 @@ from tqdm import trange
 
 from .tree import HierarchicalTree
 
+
 class PCABinaryTree(HierarchicalTree):
     def __init__(
         self,
@@ -21,10 +22,17 @@ class PCABinaryTree(HierarchicalTree):
     def _assign_points_to_leaves(self):
         # Root gets all points
         root = self.layers[self.max_depth].nodes[0]
-        root.point_indices = torch.arange(self.num_points, device=self.points.device, dtype=torch.long)
+        root.point_indices = torch.arange(
+            self.num_points, device=self.points.device, dtype=torch.long
+        )
 
         # Split top-down until leaves
-        for layer_id in trange(self.max_depth, 0, -1, desc="Assigning points to leaves, time increasing exponentially"):
+        for layer_id in trange(
+            self.max_depth,
+            0,
+            -1,
+            desc="Assigning points to leaves, time increasing exponentially",
+        ):
             parent_layer = self.layers[layer_id]
 
             # Clear next layer's memberships
@@ -45,7 +53,9 @@ class PCABinaryTree(HierarchicalTree):
                     L, R = idx, torch.empty(0, dtype=idx.dtype, device=idx.device)
                 else:
                     if producing_leaves and n < 2 * self.min_points_per_leaf:
-                        L, R = self._balanced_by_count(idx, prefer_min=self.min_points_per_leaf)
+                        L, R = self._balanced_by_count(
+                            idx, prefer_min=self.min_points_per_leaf
+                        )
                     else:
                         L, R = self._pca_half_split(idx)
                         if L.numel() == 0 or R.numel() == 0:
@@ -53,7 +63,7 @@ class PCABinaryTree(HierarchicalTree):
                         if L.numel() == 0 or R.numel() == 0:
                             L, R = self._balanced_by_count(idx)
 
-                self.all_nodes[left_id].point_indices  = L
+                self.all_nodes[left_id].point_indices = L
                 self.all_nodes[right_id].point_indices = R
 
         self._soft_repair_empty_leaves()
@@ -61,7 +71,9 @@ class PCABinaryTree(HierarchicalTree):
     # -------- splitters (location-based PCA) --------
 
     @torch.no_grad()
-    def _pca_half_split(self, point_indices: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _pca_half_split(
+        self, point_indices: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         pts = self.points[point_indices].to(torch.float64)
         X = pts - pts.mean(dim=0, keepdim=True)
         if X.abs().max().item() == 0.0:
@@ -78,14 +90,18 @@ class PCABinaryTree(HierarchicalTree):
         return point_indices[order[:left_n]], point_indices[order[left_n:]]
 
     @torch.no_grad()
-    def _widest_axis_half_split(self, point_indices: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _widest_axis_half_split(
+        self, point_indices: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         pts = self.points[point_indices]
         axis = int(torch.argmax(pts.max(0).values - pts.min(0).values).item())
         vals = pts[:, axis]
         order = torch.argsort(vals, stable=True)
         n = order.numel()
         if n < 2:
-            return point_indices, torch.empty(0, dtype=point_indices.dtype, device=point_indices.device)
+            return point_indices, torch.empty(
+                0, dtype=point_indices.dtype, device=point_indices.device
+            )
         left_n = n // 2
         L = point_indices[order[:left_n]]
         R = point_indices[order[left_n:]]
@@ -94,10 +110,14 @@ class PCABinaryTree(HierarchicalTree):
         return L, R
 
     @torch.no_grad()
-    def _balanced_by_count(self, point_indices: torch.Tensor, prefer_min: int = 1) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _balanced_by_count(
+        self, point_indices: torch.Tensor, prefer_min: int = 1
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         n = point_indices.numel()
         if n < 2:
-            return point_indices, torch.empty(0, dtype=point_indices.dtype, device=point_indices.device)
+            return point_indices, torch.empty(
+                0, dtype=point_indices.dtype, device=point_indices.device
+            )
         perm = torch.randperm(n, device=point_indices.device)
         left_n = max(prefer_min, n // 2)
         right_n = n - left_n
@@ -109,10 +129,16 @@ class PCABinaryTree(HierarchicalTree):
     @torch.no_grad()
     def _soft_repair_empty_leaves(self):
         leaves = self.layers[0].nodes
-        empties = [n for n in leaves if n.point_indices is None or n.point_indices.numel() == 0]
+        empties = [
+            n for n in leaves if n.point_indices is None or n.point_indices.numel() == 0
+        ]
         if not empties:
             return
-        donors = [n.point_indices for n in leaves if n.point_indices is not None and n.point_indices.numel() > 1]
+        donors = [
+            n.point_indices
+            for n in leaves
+            if n.point_indices is not None and n.point_indices.numel() > 1
+        ]
         if not donors:
             return
         pool = torch.cat(donors, dim=0)

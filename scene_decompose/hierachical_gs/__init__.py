@@ -15,7 +15,7 @@ from .splatNet import SplatCondenseNet, GSMMNet
 
 __all__ = [
     "PCABinaryTree",
-    "HierarchicalTree", 
+    "HierarchicalTree",
     "TreeNode",
     "LayerInfo",
     "SplatCondenseNet",

@@ -10,13 +10,17 @@ Components:
 - gaussian_moment_matching: Gaussian moment matching utilities
 """
 
-from .splat_self_attention import SplatAttention, SplatMeanPooling, SplatAttentionPooling
+from .splat_self_attention import (
+    SplatAttention,
+    SplatMeanPooling,
+    SplatAttentionPooling,
+)
 from .splat_image_attention import SplatImageAttention
 from .gaussian_moment_matching import GaussianSplatMomentMatching
 
 __all__ = [
     "SplatAttention",
-    "SplatMeanPooling", 
+    "SplatMeanPooling",
     "SplatAttentionPooling",
     "SplatImageAttention",
     "GaussianSplatMomentMatching",
