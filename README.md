@@ -75,3 +75,14 @@ python hierachical_viewer.py -s {the output GS}
 - [ ] Establishing the Detail Debugging Components 
 
 
+### Metrics Table
+
+| Dataset      | Similarity | Precision | Recall |
+|--------------|------------|-----------|--------|
+| CUHK_LOWER   |   45.55    |   16.44   | 10.82  |
+| CUHK_UPPER   |  52.67     |   17.57   | 10.44  |
+| HAV          |    55.22   |   17.30   | 10.16  |
+| SZTU         |    41.82   |   13.45   | 10.39  |
+| SZIIT        |  46.17     |  12.05    | 11.52  |
+| SMBU         |  52.24     |  31.22    |11.44   |
+| LFLS         |   50.42    |   8.92    | 10.06  |
