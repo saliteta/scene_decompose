@@ -22,10 +22,11 @@ class TrainConfig:
 @dataclass
 class LiftingConfig:
     """Feature lifting configuration."""
-
-    feature_encoder: str = "dinov3"
+    backbone: str = "vit_large_patch16_dinov3.lvd1689m"
+    model_type: str = "jafar"
+    feature_encoder: str = "jafar"
     model_path: str = ""
-    output_postfix: str = "dinov3"
+    output_postfix: str = "jafar"
 
 
 @dataclass
@@ -38,6 +39,11 @@ class HierarchicalGSConfig:
 
 
 @dataclass
+class EvalConfig:
+    """Evaluation configuration."""
+    method: str = "3DGS"
+
+@dataclass
 class PipelineConfig:
     """Main pipeline configuration."""
 
@@ -46,7 +52,8 @@ class PipelineConfig:
     train: TrainConfig = field(default_factory=TrainConfig)
     lifting: LiftingConfig = field(default_factory=LiftingConfig)
     hierachical_gs: HierarchicalGSConfig = field(default_factory=HierarchicalGSConfig)
-
+    eval: EvalConfig = field(default_factory=EvalConfig)
+    
     @classmethod
     def from_yaml(cls, yaml_path: Union[str, Path]) -> "PipelineConfig":
         """
@@ -135,8 +142,8 @@ class runner:
 
     def run(self):
         # self.train()
-        # self.lifting()
-        # self.hierachical_gs()
+        self.lifting()
+        #self.hierachical_gs()
         self.eval()
 
     def _run_command(
@@ -249,7 +256,6 @@ class runner:
             print(f"{'='*60}")
 
             # Example command - adjust based on your actual feature lifting script
-            model_type = self.config.lifting.feature_encoder.split("_")[0]
             cmd = [
                 sys.executable,
                 "distill_wrapper.py",  # Your feature lifting script
@@ -260,9 +266,9 @@ class runner:
                 "--distill.feature-ckpt",
                 str(feature_path),
                 "--model.model-type",
-                model_type,
+                self.config.lifting.model_type,
                 "--model.backbone",
-                "vit_large_patch16_dinov3.lvd1689m",  # Adjust as needed
+                self.config.lifting.backbone,
                 "--model.model-path",
                 self.config.lifting.model_path,
             ]
@@ -345,21 +351,23 @@ class runner:
         ]
 
         for scene_name in scene_names:
+            if self.config.eval.method == "H_GS":
+                pt_path = (
+                    output_dir
+                    / "ckpts"
+                    / f"h_gs_{self.config.hierachical_gs.output_postfix}.pt"
+                )
+            else:
+                pt_path = (
+                    output_dir
+                    / "ckpts"
+                    / f"ckpt_{self.config.train.steps-1}_rank0_{self.config.lifting.output_postfix}.pt"
+                )
             output_dir = self.config.get_output_dir(scene_name)
 
-            # Input path (could be hierarchical GS or regular checkpoint)
-            h_gs_path = (
-                output_dir
-                / "ckpts"
-                / f"h_gs_{self.config.hierachical_gs.output_postfix}.pt"
-            )
+
             scene_path = os.path.join(self.config.dataset_path, scene_name)
 
-            if not h_gs_path.exists():
-                print(
-                    f"Warning: Hierarchical GS not found for {scene_name}: {h_gs_path}"
-                )
-                continue
 
             print(f"\n{'='*60}")
             print(f"Evaluation for scene: {scene_name}")
@@ -372,13 +380,13 @@ class runner:
                 "--data.dir",
                 scene_path,
                 "--distill.ckpt",
-                str(h_gs_path),
+                str(pt_path),
                 "--distill.method",
-                "H_GS",
+                self.config.eval.method,
                 "--model.model-type",
-                "jafar",  # or "jafar"
+                self.config.lifting.model_type,
                 "--model.backbone",
-                "vit_large_patch16_dinov3.lvd1689m",
+                self.config.lifting.backbone,
                 "--model.model-path",
                 self.config.lifting.model_path,
             ]

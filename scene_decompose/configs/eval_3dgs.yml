@@ -1,0 +1,22 @@
+# config.yaml
+hydra:
+  run:
+    # keep working dir where you launched the script
+    dir: .
+
+dataset_path: "/data1/COLMAP_RESULT/" # The path to the dataset GauUscene
+
+# Where to write all outputs
+output_path: "/data1/vpr_eval"
+
+train:
+  steps: 10000
+
+lifting: 
+  model_type: "openclip"
+  feature_encoder: "openclip"
+  backbone: "ViT-B-16"
+  output_postfix: "openclip"
+
+eval:
+  method: "3DGS"

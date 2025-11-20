@@ -24,3 +24,5 @@ hierachical_gs:
   output_postfix: "jafar_dinov3"
 
 
+eval:
+  method: "H_GS"

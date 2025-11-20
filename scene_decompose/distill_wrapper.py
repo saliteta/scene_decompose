@@ -136,7 +136,7 @@ class Runner:
 
         feature_dim = self.get_feature_dim()
         self.splat_features = torch.zeros(
-            (means.shape[0], feature_dim), dtype=torch.float32, device=self.device
+            (means.shape[0], 512), dtype=torch.float32, device=self.device
         )
         self.splat_weights = torch.zeros(
             (means.shape[0]), dtype=torch.float32, device=self.device
@@ -151,15 +151,17 @@ class Runner:
             Ks = data["K"].to(self.device)
             pixels = data["image"].to(self.device)
             height, width = pixels.shape[1:3]
-            features = self.get_features(pixels)[0]
+            #features = self.get_features(pixels)[0]
+            features = torch.randn(1, 448, 448, 512).to(self.device)
 
             Ks = self.rescale_ks(
                 Ks.squeeze(0), width, height, features.shape[0], features.shape[1]
             ).unsqueeze(0)
-            features = F.normalize(features, p=2, dim=-1).unsqueeze(0)
+            #features = F.normalize(features, p=2, dim=-1).unsqueeze(0)
 
             # Process features in chunks if feature_dim > FEATURE_MAX_DIM
-            if feature_dim > FEATURE_MAX_DIM:
+            #if feature_dim > FEATURE_MAX_DIM:
+            if False:
                 # Process features in chunks of FEATURE_MAX_DIM
                 for start_idx in range(0, feature_dim, FEATURE_MAX_DIM):
                     end_idx = min(start_idx + FEATURE_MAX_DIM, feature_dim)
@@ -196,10 +198,10 @@ class Runner:
                     extrinsic=camtoworlds,
                     width=features.shape[1],
                     height=features.shape[2],
-                    features=features,
+                    features=features[:,:,:,:512],
                 )
 
-                self.splat_features[ids] += splat_features_per_image[:, :feature_dim]
+                self.splat_features[ids] += splat_features_per_image[:, :512]
                 self.splat_weights[ids] += splat_weights_per_image
                 del splat_features_per_image, splat_weights_per_image
 
@@ -215,7 +217,7 @@ class Runner:
         self.basename, _ = os.path.splitext(distill_args.ckpt)
 
         self.splat_features = self.splat_features.cpu()
-        torch.save(self.splat_features, self.basename + "_features.pt")
+        torch.save(self.splat_features, self.distill_args.feature_ckpt)
 
 
 def main(local_rank: int, world_rank, world_size: int, args):
